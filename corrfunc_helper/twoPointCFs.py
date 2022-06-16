@@ -68,30 +68,29 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 			return dr['npairs']
 
 
+# count pairs inside a jackknife region
 def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights, scales, nthreads):
 	nside = hp.npix2nside(len(patchmap))
 	ras, decs, chis = coords
 	randras, randdecs, randchis = randcoords
 	# get only sources/randoms inside patch
 	idxs_in_patch = np.where(patchmap[hp.ang2pix(nside, ras, decs, lonlat=True)] == patchval)
-	if chis is None:
-		coords, weights = (ras[idxs_in_patch], decs[idxs_in_patch], None), weights[idxs_in_patch]
-	else:
-		coords, weights = (ras[idxs_in_patch], decs[idxs_in_patch], chis[idxs_in_patch]), weights[idxs_in_patch]
-
 	randidxs_in_patch = np.where(patchmap[hp.ang2pix(nside, randras, randdecs, lonlat=True)] == patchval)
-	if randchis is None:
-		randcoords, randweights = (randras[randidxs_in_patch], randdecs[randidxs_in_patch], None), \
-								randweights[randidxs_in_patch]
-	else:
-		randcoords, randweights = (randras[randidxs_in_patch], randdecs[randidxs_in_patch],
-								randchis[randidxs_in_patch]), randweights[randidxs_in_patch]
 
-	# total up weights
-	if weights is None:
-		n_data, n_rands = len(coords[0]), len(randcoords[0])
-	else:
+	# if weights given, sum up weights in patch
+	if (weights is not None) and (randweights is not None):
+		weights, randweights = weights[idxs_in_patch], randweights[randidxs_in_patch]
 		n_data, n_rands = np.sum(weights), np.sum(randweights)
+	else:
+		n_data, n_rands = len(coords[0]), len(randcoords[0])
+
+	# select only coordinates in patch
+	if chis is None:
+		coords = (ras[idxs_in_patch], decs[idxs_in_patch], None)
+		randcoords = (randras[randidxs_in_patch], randdecs[randidxs_in_patch], None)
+	else:
+		coords = (ras[idxs_in_patch], decs[idxs_in_patch], chis[idxs_in_patch])
+		randcoords = (randras[randidxs_in_patch], randdecs[randidxs_in_patch], randchis[randidxs_in_patch])
 
 	# get raw pair counts
 	ddcounts = auto_counts(scales, coords, weights, nthreads=nthreads, fulldict=False)
@@ -102,15 +101,15 @@ def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights
 
 
 #
-def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, oversample=1, pimax=40.):
+def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads, oversample=1, pimax=40.):
 	patchmap = jackknife.bin_on_sky(ras=coords[0], decs=coords[1], njackknives=nbootstrap)
 	# get IDs for each patch
 	unique_patchvals = np.unique(patchmap)
 	# remove masked patches
 	unique_patchvals = unique_patchvals[np.where(unique_patchvals > -1e30)]
 	part_func = partial(counts_in_patch, patchmap=patchmap,
-						ras=coords[0], decs=coords[1], randras=randcoords[0], randdecs=randcoords[1],
-						weights=weights, randweights=randweights, scales=scales)
+						coords=coords, randcoords=randcoords,
+						weights=weights, randweights=randweights, scales=scales, nthreads=nthreads)
 	# map cores to different patches, count pairs within
 	counts = list(map(part_func, unique_patchvals))
 	counts = np.array(counts)
@@ -177,7 +176,7 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 	poisson_err = np.sqrt(2 * np.square(1 + w) / DD_counts['npairs'])
 
 	if nbootstrap > 0:
-		w_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap,
+		w_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
 												oversample=oversample, pimax=pimax)
 	else:
 		w_realizations = None
