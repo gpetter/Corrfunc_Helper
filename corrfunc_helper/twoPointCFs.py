@@ -3,6 +3,9 @@ from Corrfunc.mocks.DDtheta_mocks import DDtheta_mocks
 from Corrfunc.mocks.DDrppi_mocks import DDrppi_mocks
 from . import estimators
 import numpy as np
+import healpy as hp
+from . import jackkniving
+from functools import partial
 
 
 # count autocorrelation pairs
@@ -65,9 +68,83 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 			return dr['npairs']
 
 
+def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights, scales, nthreads):
+	nside = hp.npix2nside(len(patchmap))
+	ras, decs, chis = coords
+	randras, randdecs, randchis = randcoords
+	# get only sources/randoms inside patch
+	idxs_in_patch = np.where(patchmap[hp.ang2pix(nside, ras, decs, lonlat=True)] == patchval)
+	if chis is None:
+		coords, weights = (ras[idxs_in_patch], decs[idxs_in_patch], None), weights[idxs_in_patch]
+	else:
+		coords, weights = (ras[idxs_in_patch], decs[idxs_in_patch], chis[idxs_in_patch]), weights[idxs_in_patch]
+
+	randidxs_in_patch = np.where(patchmap[hp.ang2pix(nside, randras, randdecs, lonlat=True)] == patchval)
+	if randchis is None:
+		randcoords, randweights = (randras[randidxs_in_patch], randdecs[randidxs_in_patch], None), \
+								randweights[randidxs_in_patch]
+	else:
+		randcoords, randweights = (randras[randidxs_in_patch], randdecs[randidxs_in_patch],
+								randchis[randidxs_in_patch]), randweights[randidxs_in_patch]
+
+	# total up weights
+	if weights is None:
+		n_data, n_rands = len(coords[0]), len(randcoords[0])
+	else:
+		n_data, n_rands = np.sum(weights), np.sum(randweights)
+
+	# get raw pair counts
+	ddcounts = auto_counts(scales, coords, weights, nthreads=nthreads, fulldict=False)
+	drcounts = cross_counts(scales, coords, randcoords, weights, randweights, nthreads=nthreads, fulldict=False)
+	rrcounts = auto_counts(scales, randcoords, randweights, nthreads=nthreads, fulldict=False)
+
+	return [ddcounts, drcounts, rrcounts, n_data, n_rands]
+
+
+#
+def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, oversample=1, pimax=40.):
+	patchmap = jackkniving.bin_on_sky(ras=coords[0], decs=coords[1], njackknives=nbootstrap)
+	# get IDs for each patch
+	unique_patchvals = np.unique(patchmap)
+	# remove masked patches
+	unique_patchvals = unique_patchvals[np.where(unique_patchvals > -1e30)]
+	part_func = partial(counts_in_patch, patchmap=patchmap,
+						ras=coords[0], decs=coords[1], randras=randcoords[0], randdecs=randcoords[1],
+						weights=weights, randweights=randweights, scales=scales)
+	# map cores to different patches, count pairs within
+	counts = list(map(part_func, unique_patchvals))
+	counts = np.array(counts)
+	# separate out DD, DR, RR counts from returned array
+	dd_counts, dr_counts, rr_counts = counts[:, 0], counts[:, 1], counts[:, 2]
+	ndata, nrands = counts[:, 3], counts[:, 4]
+
+	w_realizations = []
+	# for each bootstrap, randomly select patches (oversampled by factor of N) and sum counts in those patches
+	for k in range(nbootstrap):
+		# randomly select patches with replacement
+		boot_patches = np.random.choice(np.arange(len(unique_patchvals)), oversample * len(unique_patchvals))
+		# sum pairs in those patches
+		bootndata, bootnrands = ndata[boot_patches], nrands[boot_patches]
+		totdata, totrands = np.sum(bootndata) / np.float(oversample), np.sum(bootnrands) / np.float(oversample)
+		boot_ddcounts, boot_drcounts, bootrrcounts = dd_counts[boot_patches], dr_counts[boot_patches], \
+													 rr_counts[boot_patches]
+		totddcounts, totdrcounts, totrrcounts = np.sum(boot_ddcounts, axis=0), np.sum(boot_drcounts, axis=0), \
+												np.sum(bootrrcounts, axis=0)
+		if coords[2] is None:
+			w_realizations.append(estimators.convert_raw_counts_to_cf(totdata, totdata, totrands,
+																	totrands, totddcounts, totdrcounts, totdrcounts,
+																	totrrcounts))
+		else:
+			w_realizations.append(estimators.convert_raw_counts_to_wp(totdata, totdata, totrands,
+																	totrands, totddcounts, totdrcounts, totdrcounts,
+																	totrrcounts, nrpbins=len(scales), pimax=pimax))
+	return w_realizations
+
+
 # Measure an autocorrelation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
 def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=None,
-							nthreads=1, randcounts=None, estimator='LS', pimax=40., dpi=1.):
+						nthreads=1, randcounts=None, estimator='LS', pimax=40., dpi=1.,
+						nbootstrap=0, oversample=1):
 
 	if (weights is not None) and (randweights is not None):
 		n_data, n_rands = np.sum(weights), np.sum(randweights)
@@ -88,16 +165,24 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 	else:
 		RR_counts = randcounts
 
+	# angular correlation function
 	if coords[2] is None:
 		w = estimators.convert_counts_to_cf(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts,
 									DR_counts, RR_counts, estimator=estimator)
+	# spatial projected correlation function
 	else:
 		w = estimators.convert_counts_to_wp(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts, DR_counts,
 											RR_counts, nrpbins=len(scales), pimax=pimax, dpi=dpi, estimator=estimator)
 
 	poisson_err = np.sqrt(2 * np.square(1 + w) / DD_counts['npairs'])
 
-	return w, poisson_err
+	if nbootstrap > 0:
+		w_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap,
+												oversample=oversample, pimax=pimax)
+	else:
+		w_realizations = None
+
+	return w, poisson_err, w_realizations
 
 
 # angular cross correlation
@@ -105,9 +190,11 @@ def cross_corr_from_coords(coords, refcoords, randcoords, scales, refrandcoords=
 							refweights=None, randweights=None, refrandweights=None, nthreads=1, pimax=40.):
 
 	if (refweights is not None) | (weights is not None) | (randweights is not None) | (refrandweights is not None):
-		n_data, n_ref, n_rands, n_refrands = np.sum(weights), np.sum(refweights), np.sum(randweights), np.sum(refrandweights)
+		n_data, n_ref, n_rands, n_refrands = np.sum(weights), np.sum(refweights), np.sum(randweights), \
+											np.sum(refrandweights)
 	else:
-		n_data, n_ref, n_rands, n_refrands = len(coords[0]), len(refcoords[0]), len(randcoords[0]), len(refrandcoords[0])
+		n_data, n_ref, n_rands, n_refrands = len(coords[0]), len(refcoords[0]), len(randcoords[0]), \
+											len(refrandcoords[0])
 
 	# count pairs between sample and control sample
 	D1D2_counts = cross_counts(scales, coords, refcoords, weights1=weights,
@@ -149,3 +236,5 @@ def cross_corr_from_coords(coords, refcoords, randcoords, scales, refrandcoords=
 	w_poisson_err = (1 + w) / np.sqrt(D1D2_counts['npairs'])
 
 	return w, w_poisson_err
+
+
