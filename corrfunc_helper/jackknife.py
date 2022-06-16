@@ -25,3 +25,21 @@ def bin_on_sky(ras, decs, npatches, nsides=64):
 	blankmap[uniquepix] = labels
 	return blankmap
 
+
+def covariance_matrix(resampled_profiles, avg_profile):
+	n_bins = len(resampled_profiles[0])
+	n_realizations = len(resampled_profiles)
+	c_ij = np.zeros((n_bins, n_bins))
+	for i in range(n_bins):
+		for j in range(n_bins):
+			k_i = resampled_profiles[:, i]
+			k_i_bar = avg_profile[i]
+
+			k_j = resampled_profiles[:, j]
+			k_j_bar = avg_profile[j]
+
+			product = (k_i - k_i_bar) * (k_j - k_j_bar)
+			sum = np.sum(product)
+			c_ij[i, j] = 1 / (n_realizations - 1) * sum
+
+	return c_ij

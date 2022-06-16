@@ -179,10 +179,12 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 	if nbootstrap > 0:
 		w_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
 												oversample=oversample, pimax=pimax)
+		bootstrap_err = np.std(w_realizations, axis=0)
+		covar_matrix = jackknife.covariance_matrix(np.array(w_realizations), np.array(w))
 	else:
-		w_realizations = None
+		w_realizations, bootstrap_err, covar_matrix = None, None, None
 
-	return w, poisson_err, w_realizations
+	return w, poisson_err, bootstrap_err, covar_matrix
 
 
 # angular cross correlation
