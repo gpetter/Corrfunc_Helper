@@ -4,7 +4,7 @@ from Corrfunc.mocks.DDrppi_mocks import DDrppi_mocks
 from . import estimators
 import numpy as np
 import healpy as hp
-from . import jackkniving
+from . import jackknife
 from functools import partial
 
 
@@ -103,7 +103,7 @@ def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights
 
 #
 def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, oversample=1, pimax=40.):
-	patchmap = jackkniving.bin_on_sky(ras=coords[0], decs=coords[1], njackknives=nbootstrap)
+	patchmap = jackknife.bin_on_sky(ras=coords[0], decs=coords[1], njackknives=nbootstrap)
 	# get IDs for each patch
 	unique_patchvals = np.unique(patchmap)
 	# remove masked patches
