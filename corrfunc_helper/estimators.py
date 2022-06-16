@@ -78,6 +78,18 @@ def convert_raw_counts_to_cf(ND1, ND2, NR1, NR2,
 		return "Choose Estimator"
 	return cf
 
+def convert_raw_counts_to_wp(ND1, ND2, NR1, NR2,
+							D1D2, D1R2, D2R1, R1R2, nrpbins, pimax, dpi=1.0,
+							estimator='LS'):
+	xirppi = convert_counts_to_cf(ND1, ND2, NR1, NR2,
+								  D1D2, D1R2, D2R1, R1R2,
+								  estimator=estimator)
+	wp = np.empty(nrpbins)
+	npibins = len(xirppi) // nrpbins
+	for i in range(nrpbins):
+		wp[i] = 2.0 * dpi * np.sum(xirppi[i * npibins:(i + 1) * npibins])
+	return wp
+
 
 def convert_counts_to_wp(ND1, ND2, NR1, NR2,
 							D1D2, D1R2, D2R1, R1R2,
