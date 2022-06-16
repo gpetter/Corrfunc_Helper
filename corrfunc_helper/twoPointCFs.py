@@ -101,8 +101,9 @@ def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights
 
 
 #
-def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads, oversample=1, pimax=40.):
-	patchmap = jackknife.bin_on_sky(ras=coords[0], decs=coords[1], njackknives=nbootstrap)
+def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
+							oversample=1, pimax=40., npatches=30):
+	patchmap = jackknife.bin_on_sky(ras=coords[0], decs=coords[1], npatches=npatches)
 	# get IDs for each patch
 	unique_patchvals = np.unique(patchmap)
 	# remove masked patches
