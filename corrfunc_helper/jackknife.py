@@ -28,11 +28,13 @@ def bin_on_sky(ras, decs, npatches, nsides=64):
 
 def covariance_matrix(resampled_profiles, avg_profile):
 	n_bins = len(resampled_profiles[0])
+
 	n_realizations = len(resampled_profiles)
 	c_ij = np.zeros((n_bins, n_bins))
 	for i in range(n_bins):
 		for j in range(n_bins):
 			k_i = resampled_profiles[:, i]
+
 			k_i_bar = avg_profile[i]
 
 			k_j = resampled_profiles[:, j]

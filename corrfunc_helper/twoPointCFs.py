@@ -137,7 +137,7 @@ def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbo
 		else:
 			w_realizations.append(estimators.convert_raw_counts_to_wp(totdata, totdata, totrands,
 																	totrands, totddcounts, totdrcounts, totdrcounts,
-																	totrrcounts, nrpbins=len(scales), pimax=pimax))
+																	totrrcounts, nrpbins=len(scales)-1, pimax=pimax))
 	return w_realizations
 
 
@@ -169,12 +169,12 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 	if coords[2] is None:
 		w = estimators.convert_counts_to_cf(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts,
 									DR_counts, RR_counts, estimator=estimator)
+		poisson_err = np.sqrt(2 * np.square(1 + w) / DD_counts['npairs'])
 	# spatial projected correlation function
 	else:
 		w = estimators.convert_counts_to_wp(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts, DR_counts,
-											RR_counts, nrpbins=len(scales), pimax=pimax, dpi=dpi, estimator=estimator)
-
-	poisson_err = np.sqrt(2 * np.square(1 + w) / DD_counts['npairs'])
+											RR_counts, nrpbins=len(scales)-1, pimax=pimax, dpi=dpi, estimator=estimator)
+		poisson_err = None
 
 	if nbootstrap > 0:
 		w_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
@@ -219,7 +219,7 @@ def cross_corr_from_coords(coords, refcoords, randcoords, scales, refrandcoords=
 		else:
 			w = estimators.convert_counts_to_wp(ND1=n_data, ND2=n_ref, NR1=n_rands, NR2=n_refrands, D1D2=D1D2_counts,
 												D1R2=D1R2_counts, D2R1=D2R1_counts,
-												R1R2=R1R2_counts, nrpbins=len(scales), pimax=pimax, dpi=1.,
+												R1R2=R1R2_counts, nrpbins=len(scales)-1, pimax=pimax, dpi=1.,
 												estimator='LS')
 	# no reference random catalog, use Peebles estimator
 	else:
@@ -232,7 +232,7 @@ def cross_corr_from_coords(coords, refcoords, randcoords, scales, refrandcoords=
 		else:
 			w = estimators.convert_counts_to_wp(ND1=n_data, ND2=None, NR1=n_rands, NR2=None, D1D2=D1D2_counts,
 												D1R2=D2R1_counts, D2R1=D2R1_counts,
-												R1R2=D2R1_counts, nrpbins=len(scales), pimax=pimax, dpi=1.,
+												R1R2=D2R1_counts, nrpbins=len(scales)-1, pimax=pimax, dpi=1.,
 												estimator='Peebles')
 
 	w_poisson_err = (1 + w) / np.sqrt(D1D2_counts['npairs'])

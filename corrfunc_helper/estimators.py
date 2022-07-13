@@ -104,6 +104,7 @@ def convert_counts_to_wp(ND1, ND2, NR1, NR2,
 	xirppi = convert_counts_to_cf(ND1, ND2, NR1, NR2,
 									D1D2, D1R2, D2R1, R1R2,
 									estimator=estimator)
+
 	wp = np.empty(nrpbins)
 	npibins = len(xirppi) // nrpbins
 	if ((npibins * nrpbins) != len(xirppi)):
