@@ -1,10 +1,10 @@
-
 from Corrfunc.mocks.DDtheta_mocks import DDtheta_mocks
 from Corrfunc.mocks.DDrppi_mocks import DDrppi_mocks
 from . import estimators
 import numpy as np
 import healpy as hp
 from . import jackknife
+from . import plots
 from functools import partial
 
 
@@ -144,7 +144,7 @@ def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbo
 # Measure an autocorrelation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
 def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=None,
 						nthreads=1, randcounts=None, estimator='LS', pimax=40., dpi=1.,
-						nbootstrap=0, oversample=1):
+						nbootstrap=0, oversample=1, plot_2dcf=False):
 
 	if (weights is not None) and (randweights is not None):
 		n_data, n_rands = np.sum(weights), np.sum(randweights)
@@ -172,6 +172,10 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 		poisson_err = np.sqrt(2 * np.square(1 + w) / DD_counts['npairs'])
 	# spatial projected correlation function
 	else:
+		if plot_2dcf:
+			cf = estimators.convert_counts_to_cf(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts,
+									DR_counts, RR_counts, estimator=estimator)
+			return plots.plot_2d_corr_func(cf)
 		w = estimators.convert_counts_to_wp(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts, DR_counts,
 											RR_counts, nrpbins=len(scales)-1, pimax=pimax, dpi=dpi, estimator=estimator)
 		poisson_err = None
