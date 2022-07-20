@@ -26,21 +26,15 @@ def bin_on_sky(ras, decs, npatches, nsides=64):
 	return blankmap
 
 
+# estimate covariance from many bootstrap/jackknife resamplings of data
 def covariance_matrix(resampled_profiles, avg_profile):
-	n_bins = len(resampled_profiles[0])
-
-	n_realizations = len(resampled_profiles)
+	n_bins, n_realizations = len(resampled_profiles[0]), len(resampled_profiles)
+	# initialize matrix
 	c_ij = np.zeros((n_bins, n_bins))
+	# loop over resamplings, for each i and j combination, calculate product of difference from mean result
 	for i in range(n_bins):
 		for j in range(n_bins):
-			k_i = resampled_profiles[:, i]
-
-			k_i_bar = avg_profile[i]
-
-			k_j = resampled_profiles[:, j]
-			k_j_bar = avg_profile[j]
-
-			product = (k_i - k_i_bar) * (k_j - k_j_bar)
+			product = (resampled_profiles[:, i] - avg_profile[i]) * (resampled_profiles[:, j] - avg_profile[j])
 			sum = np.sum(product)
 			c_ij[i, j] = 1 / (n_realizations - 1) * sum
 

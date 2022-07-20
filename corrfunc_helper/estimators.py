@@ -2,6 +2,8 @@ import numpy as np
 # edited code from Corrfunc code to allow Peebles estimator of correlation function
 
 
+# convert either angular or spatial counts to correlation function
+# implemented custom Peebles estimator, as only Landy-Szalay built into Corrfunc
 def convert_counts_to_cf(ND1, ND2, NR1, NR2,
 							D1D2, D1R2, D2R1, R1R2,
 							estimator='Peebles'):
@@ -56,6 +58,8 @@ def convert_counts_to_cf(ND1, ND2, NR1, NR2,
 
 	return cf
 
+
+# can also calculate correlation function from normal arrays instead of Corrfunc dictionaries
 def convert_raw_counts_to_cf(ND1, ND2, NR1, NR2,
 							D1D2, D1R2, D2R1, R1R2,
 							estimator='LS'):
@@ -78,19 +82,8 @@ def convert_raw_counts_to_cf(ND1, ND2, NR1, NR2,
 		return "Choose Estimator"
 	return cf
 
-def convert_raw_counts_to_wp(ND1, ND2, NR1, NR2,
-							D1D2, D1R2, D2R1, R1R2, nrpbins, pimax, dpi=1.0,
-							estimator='LS'):
-	xirppi = convert_counts_to_cf(ND1, ND2, NR1, NR2,
-								  D1D2, D1R2, D2R1, R1R2,
-								  estimator=estimator)
-	wp = np.empty(nrpbins)
-	npibins = len(xirppi) // nrpbins
-	for i in range(nrpbins):
-		wp[i] = 2.0 * dpi * np.sum(xirppi[i * npibins:(i + 1) * npibins])
-	return wp
 
-
+# convert 2D pair counts in pi and r_p into projected correlation function wp(r_p)
 def convert_counts_to_wp(ND1, ND2, NR1, NR2,
 							D1D2, D1R2, D2R1, R1R2,
 							nrpbins, pimax, dpi=1.0,
@@ -129,4 +122,18 @@ def convert_counts_to_wp(ND1, ND2, NR1, NR2,
 	for i in range(nrpbins):
 		wp[i] = 2.0 * dpi * np.sum(xirppi[i * npibins:(i + 1) * npibins])
 
+	return wp
+
+
+# same as above but for numpy array counts instead of dictionaries
+def convert_raw_counts_to_wp(ND1, ND2, NR1, NR2,
+							D1D2, D1R2, D2R1, R1R2, nrpbins, pimax, dpi=1.0,
+							estimator='LS'):
+	xirppi = convert_counts_to_cf(ND1, ND2, NR1, NR2,
+								  D1D2, D1R2, D2R1, R1R2,
+								  estimator=estimator)
+	wp = np.empty(nrpbins)
+	npibins = len(xirppi) // nrpbins
+	for i in range(nrpbins):
+		wp[i] = 2.0 * dpi * np.sum(xirppi[i * npibins:(i + 1) * npibins])
 	return wp

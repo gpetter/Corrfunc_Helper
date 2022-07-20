@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy import signal
 
 
-
-def plot_2d_corr_func(cf):
+def plot_2d_corr_func(cf, setnegszero=True):
 	def gaussKern(size):
 		"""
 		Calculate a normalised Gaussian kernel to apply as a smoothing function
@@ -30,12 +30,9 @@ def plot_2d_corr_func(cf):
 		Returns
 		improc : smoothed array (same dimensions as the input array)
 		"""
-		from scipy import signal
 		g = gaussKern(n)
 		improc = signal.convolve2d(im, g, mode='same', boundary='symm')
 		return (improc)
-
-	setnegszero = True
 
 	nbins = int(np.sqrt(len(cf)))
 	cf2d = np.reshape(np.array(cf), (-1, nbins))
