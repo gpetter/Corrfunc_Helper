@@ -1,15 +1,20 @@
 from Corrfunc.mocks.DDtheta_mocks import DDtheta_mocks
 from Corrfunc.mocks.DDrppi_mocks import DDrppi_mocks
+from Corrfunc.mocks.DDsmu_mocks import DDsmu_mocks
 from . import estimators
 import numpy as np
 import healpy as hp
 from . import jackknife
 from . import plots
 from functools import partial
+from scipy import interpolate
+import importlib
+importlib.reload(plots)
+importlib.reload(estimators)
 
 
 # count autocorrelation pairs
-def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40.):
+def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., mubins=None):
 	# unpack coordinate tuple
 	# third entry should be None if you only want angular counts
 	ras, decs, chis = coords
@@ -21,8 +26,13 @@ def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40.):
 
 	# if distances given, measure counts in rp and pi bins
 	if chis is not None:
-		dd = DDrppi_mocks(1, 2, nthreads, pimax, scales, ras, decs, chis, weights1=weights,
-							is_comoving_dist=True, weight_type=weight_type)
+		if mubins is None:
+			dd = DDrppi_mocks(1, 2, nthreads, pimax, scales, ras, decs, chis, weights1=weights,
+								is_comoving_dist=True, weight_type=weight_type)
+		else:
+			dd = DDsmu_mocks(autocorr=1, cosmology=2, nthreads=nthreads, mu_max=1., nmu_bins=mubins,
+							 binfile=scales, RA1=ras, DEC1=decs, CZ1=chis, weights1=weights, is_comoving_dist=True,
+							 weight_type=weight_type)
 	# if no distances given, only get angular counts
 	else:
 		dd = DDtheta_mocks(1, nthreads, scales, ras, decs, weights1=weights, weight_type=weight_type)
@@ -37,7 +47,7 @@ def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40.):
 
 
 # count cross-pairs between samples
-def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulldict=True, pimax=40.):
+def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulldict=True, pimax=40., mubins=None):
 	# unpack coordinate tuple
 	# third entry should be None if you only want angular counts
 	ras1, decs1, chis1 = coords1
@@ -51,7 +61,13 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 
 	# if distances given, measure counts in rp and pi bins
 	if chis1 is not None:
-		dr = DDrppi_mocks(0, 2, nthreads, pimax, scales, ras1, decs1, chis1, weights1=weights1,
+		if mubins is None:
+			dr = DDrppi_mocks(0, 2, nthreads, pimax, scales, ras1, decs1, chis1, weights1=weights1,
+								RA2=ras2, DEC2=decs2, CZ2=chis2, weights2=weights2, is_comoving_dist=True,
+								weight_type=weight_type)
+		else:
+			dr = DDsmu_mocks(autocorr=0, cosmology=2, nthreads=nthreads, mu_max=1., nmu_bins=mubins,
+							binfile=scales, RA1=ras1, DEC1=decs1, CZ1=chis1, weights1=weights1,
 							RA2=ras2, DEC2=decs2, CZ2=chis2, weights2=weights2, is_comoving_dist=True,
 							weight_type=weight_type)
 	# if no distances given, only get angular counts
@@ -69,7 +85,7 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 
 
 # count pairs inside a jackknife region
-def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights, scales, nthreads):
+def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights, scales, nthreads, mubins):
 	nside = hp.npix2nside(len(patchmap))
 	ras, decs, chis = coords
 	randras, randdecs, randchis = randcoords
@@ -93,16 +109,16 @@ def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights
 		randcoords = (randras[randidxs_in_patch], randdecs[randidxs_in_patch], randchis[randidxs_in_patch])
 
 	# get raw pair counts
-	ddcounts = auto_counts(scales, coords, weights, nthreads=nthreads, fulldict=False)
-	drcounts = cross_counts(scales, coords, randcoords, weights, randweights, nthreads=nthreads, fulldict=False)
-	rrcounts = auto_counts(scales, randcoords, randweights, nthreads=nthreads, fulldict=False)
+	ddcounts = auto_counts(scales, coords, weights, nthreads=nthreads, fulldict=False, mubins=mubins)
+	drcounts = cross_counts(scales, coords, randcoords, weights, randweights, nthreads=nthreads, fulldict=False, mubins=mubins)
+	rrcounts = auto_counts(scales, randcoords, randweights, nthreads=nthreads, fulldict=False, mubins=mubins)
 
 	return [ddcounts, drcounts, rrcounts, n_data, n_rands]
 
 
 #
 def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
-							oversample=1, pimax=40., npatches=30):
+							oversample=1, pimax=40., mubins=None, npatches=30, estimator='LS', wedges=None):
 	patchmap = jackknife.bin_on_sky(ras=coords[0], decs=coords[1], npatches=npatches)
 	# get IDs for each patch
 	unique_patchvals = np.unique(patchmap)
@@ -110,7 +126,7 @@ def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbo
 	unique_patchvals = unique_patchvals[np.where(unique_patchvals > -1e30)]
 	part_func = partial(counts_in_patch, patchmap=patchmap,
 						coords=coords, randcoords=randcoords,
-						weights=weights, randweights=randweights, scales=scales, nthreads=nthreads)
+						weights=weights, randweights=randweights, scales=scales, nthreads=nthreads, mubins=mubins)
 	# map cores to different patches, count pairs within
 	counts = list(map(part_func, unique_patchvals))
 	counts = np.array(counts)
@@ -130,65 +146,86 @@ def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbo
 													 rr_counts[boot_patches]
 		totddcounts, totdrcounts, totrrcounts = np.sum(boot_ddcounts, axis=0), np.sum(boot_drcounts, axis=0), \
 												np.sum(bootrrcounts, axis=0)
+		cf = estimators.convert_counts_to_cf(totdata, totdata, totrands,
+											totrands, totddcounts, totdrcounts, totdrcounts,
+											totrrcounts, estimator=estimator)
 		if coords[2] is None:
-			w_realizations.append(estimators.convert_raw_counts_to_cf(totdata, totdata, totrands,
-																	totrands, totddcounts, totdrcounts, totdrcounts,
-																	totrrcounts))
+			w_realizations.append(cf)
 		else:
-			w_realizations.append(estimators.convert_raw_counts_to_wp(totdata, totdata, totrands,
-																	totrands, totddcounts, totdrcounts, totdrcounts,
-																	totrrcounts, nrpbins=len(scales)-1, pimax=pimax))
+			if mubins is None:
+				w_realizations.append(estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1, pimax=pimax))
+			else:
+				xi_s = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales) - 1, nmubins=mubins, wedges=wedges)
+				#mono, quad = xi_s[0], xi_s[1]
+				w_realizations.append(xi_s)
 	return w_realizations
 
 
 # Measure an autocorrelation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
 def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=None,
-						nthreads=1, randcounts=None, estimator='LS', pimax=40., dpi=1.,
-						nbootstrap=0, oversample=1, plot_2dcf=False):
+						nthreads=1, randcounts=None, estimator='LS', pimax=40., dpi=1., mubins=None,
+						nbootstrap=0, oversample=1, plot_2dcf=False, lims_2dcf=(None, None), wedges=None):
 
+	# number of objects = sum of weights
 	if (weights is not None) and (randweights is not None):
 		n_data, n_rands = np.sum(weights), np.sum(randweights)
 	else:
 		n_data, n_rands = len(coords[0]), len(randcoords[0])
 
+	# if plotting xi(rp, pi), want rp bins and pi bins to match
+	if plot_2dcf & (mubins is None):
+		scales = np.linspace(0.1, pimax, int(pimax)+1)
+
 	# autocorrelation of catalog
-	DD_counts = auto_counts(scales, coords, weights=weights, nthreads=nthreads, pimax=pimax)
+	DD_counts = auto_counts(scales, coords, weights=weights, nthreads=nthreads, pimax=pimax, mubins=mubins)
 
 	# cross correlation between data and random catalog
 	DR_counts = cross_counts(scales, coords, randcoords, weights1=weights, weights2=randweights,
-								nthreads=nthreads, pimax=pimax)
+								nthreads=nthreads, pimax=pimax, mubins=mubins)
 
-	# can optionally send random counts from previous run as it
+	# can optionally send (expensive) random counts from previous run as input
 	if randcounts is None:
 		# autocorrelation of random points
-		RR_counts = auto_counts(scales, randcoords, weights=randweights, nthreads=nthreads, pimax=pimax)
+		RR_counts = auto_counts(scales, randcoords, weights=randweights, nthreads=nthreads, pimax=pimax, mubins=mubins)
 	else:
 		RR_counts = randcounts
 
+	outdict = {}
+	# calculate correlation function
+	cf = estimators.convert_counts_to_cf(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts,
+									DR_counts, RR_counts, estimator=estimator)
 	# angular correlation function
 	if coords[2] is None:
-		w = estimators.convert_counts_to_cf(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts,
-									DR_counts, RR_counts, estimator=estimator)
-		poisson_err = np.sqrt(2 * np.square(1 + w) / DD_counts['npairs'])
+		outdict['w_theta'] = cf
+		outdict['w_err_poisson'] = np.sqrt(2 * np.square(1 + cf) / DD_counts['npairs'])
 	# spatial projected correlation function
 	else:
 		if plot_2dcf:
-			cf = estimators.convert_counts_to_cf(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts,
-									DR_counts, RR_counts, estimator=estimator)
-			return plots.plot_2d_corr_func(cf)
-		w = estimators.convert_counts_to_wp(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts, DR_counts,
-											RR_counts, nrpbins=len(scales)-1, pimax=pimax, dpi=dpi, estimator=estimator)
-		poisson_err = None
+			if mubins is None:
+				return plots.plot_2d_corr_func(cf, inputrange=lims_2dcf)
+			else:
+				return plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins, inputrange=lims_2dcf)
+		# if getting projected correlation function wp(rp)
+		if mubins is None:
+			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
+											pimax=pimax, dpi=dpi)
+		# otherwise get redshift space clustering
+		else:
+			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
+			outdict['mono'], outdict['quad'] = w[0], w[1]
 
 	if nbootstrap > 0:
 		w_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
-												oversample=oversample, pimax=pimax)
-		bootstrap_err = np.std(w_realizations, axis=0)
-		covar_matrix = jackknife.covariance_matrix(np.array(w_realizations), np.array(w))
-	else:
-		w_realizations, bootstrap_err, covar_matrix = None, None, None
+												oversample=oversample, pimax=pimax, estimator=estimator, mubins=mubins,
+												wedges=wedges)
+		realization_variance = np.std(w_realizations, axis=0)
+		if mubins is None:
+			outdict['wp_err'] = realization_variance
+			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+		else:
+			outdict['mono_err'], outdict['quad_err'] = realization_variance[0], realization_variance[1]
 
-	return w, poisson_err, bootstrap_err, covar_matrix
+	return outdict
 
 
 # angular cross correlation

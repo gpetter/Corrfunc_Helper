@@ -59,44 +59,16 @@ def convert_counts_to_cf(ND1, ND2, NR1, NR2,
 	return cf
 
 
-# can also calculate correlation function from normal arrays instead of Corrfunc dictionaries
-def convert_raw_counts_to_cf(ND1, ND2, NR1, NR2,
-							D1D2, D1R2, D2R1, R1R2,
-							estimator='LS'):
-	if 'LS' in estimator or 'Landy' in estimator:
-		fN1 = np.float(NR1) / np.float(ND1)
-		fN2 = np.float(NR2) / np.float(ND2)
-		cf = np.zeros(len(D1D2))
-		cf[:] = np.nan
-		cf = (fN1 * fN2 * D1D2 -
-					fN1 * D1R2 -
-					fN2 * D2R1 +
-					R1R2) / R1R2
-	elif estimator == 'Peebles':
-		fN1 = np.float(NR1) / np.float(ND1)
 
-		cf = np.zeros(len(D1D2))
-		cf[:] = np.nan
-		cf = (fN1 * D1D2) / D1R2 - 1
-	else:
-		return "Choose Estimator"
-	return cf
 
 
 # convert 2D pair counts in pi and r_p into projected correlation function wp(r_p)
-def convert_counts_to_wp(ND1, ND2, NR1, NR2,
-							D1D2, D1R2, D2R1, R1R2,
-							nrpbins, pimax, dpi=1.0,
-							estimator='Peebles'):
+def convert_cf_to_wp(xirppi, nrpbins, pimax, dpi=1.0):
 
 	if dpi <= 0.0:
 		msg = 'Binsize along the line of sight (dpi) = {0}'\
 			  'must be positive'.format(dpi)
 		raise ValueError(msg)
-
-	xirppi = convert_counts_to_cf(ND1, ND2, NR1, NR2,
-									D1D2, D1R2, D2R1, R1R2,
-									estimator=estimator)
 
 	wp = np.empty(nrpbins)
 	npibins = len(xirppi) // nrpbins
@@ -125,6 +97,66 @@ def convert_counts_to_wp(ND1, ND2, NR1, NR2,
 	return wp
 
 
+# convert 2D pair counts in pi and r_p into projected correlation function wp(r_p)
+def convert_cf_to_xi_s(xi_s_mu, nsbins, nmubins, wedges=None):
+	from halotools.mock_observables import tpcf_multipole
+
+
+	xi_s_mu = np.reshape(xi_s_mu, (nsbins, nmubins))
+	mubinedges = np.linspace(0., 1., nmubins+1)
+
+	monopoles, quadrupoles = [], []
+
+	if wedges is None:
+		monopoles = tpcf_multipole(xi_s_mu, mu_bins=mubinedges, order=0)
+		quadrupoles = tpcf_multipole(xi_s_mu, mu_bins=mubinedges, order=2)
+	else:
+		wedgelength = int(nmubins / wedges)
+		for j in range(wedges):
+			wedgebinedges = mubinedges[(j*wedgelength):((j+1)*wedgelength+1)]
+			xi_s_mu_in_wedge = xi_s_mu[:, (j*wedgelength):((j+1)*wedgelength)]
+			monopoles.append(tpcf_multipole(xi_s_mu_in_wedge, mu_bins=wedgebinedges, order=0))
+			quadrupoles.append(tpcf_multipole(xi_s_mu_in_wedge, mu_bins=wedgebinedges, order=2))
+	return monopoles, quadrupoles
+
+
+	"""mubin_idx_step = int(nmubins / n_mu_int_bins)
+
+
+	delta_mu = 1. / mubin_idx_step
+
+	xis = []
+	for i in range(n_mu_int_bins):
+		print((i+1)*mubin_idx_step)
+		xi_in_mubin = xi_s_mu[:, i*mubin_idx_step:(i+1)*mubin_idx_step]
+		print(xi_in_mubin)
+		xis.append(1 / delta_mu * np.trapz(xi_in_mubin, dx=1./nmubins, axis=1))
+	return xis
+
+
+# can also calculate correlation function from normal arrays instead of Corrfunc dictionaries
+def convert_raw_counts_to_cf(ND1, ND2, NR1, NR2,
+							D1D2, D1R2, D2R1, R1R2,
+							estimator='LS'):
+	if 'LS' in estimator or 'Landy' in estimator:
+		fN1 = np.float(NR1) / np.float(ND1)
+		fN2 = np.float(NR2) / np.float(ND2)
+		cf = np.zeros(len(D1D2))
+		cf[:] = np.nan
+		cf = (fN1 * fN2 * D1D2 -
+					fN1 * D1R2 -
+					fN2 * D2R1 +
+					R1R2) / R1R2
+	elif estimator == 'Peebles':
+		fN1 = np.float(NR1) / np.float(ND1)
+
+		cf = np.zeros(len(D1D2))
+		cf[:] = np.nan
+		cf = (fN1 * D1D2) / D1R2 - 1
+	else:
+		return "Choose Estimator"
+	return cf
+
 # same as above but for numpy array counts instead of dictionaries
 def convert_raw_counts_to_wp(ND1, ND2, NR1, NR2,
 							D1D2, D1R2, D2R1, R1R2, nrpbins, pimax, dpi=1.0,
@@ -137,3 +169,4 @@ def convert_raw_counts_to_wp(ND1, ND2, NR1, NR2,
 	for i in range(nrpbins):
 		wp[i] = 2.0 * dpi * np.sum(xirppi[i * npibins:(i + 1) * npibins])
 	return wp
+	"""
