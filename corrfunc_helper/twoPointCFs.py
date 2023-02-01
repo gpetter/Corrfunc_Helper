@@ -13,6 +13,16 @@ importlib.reload(plots)
 importlib.reload(estimators)
 
 
+def bin_centers(binedges):
+	# check if linear
+	if (binedges[2] - binedges[1]) == (binedges[1] - binedges[0]):
+		return (binedges[1:] + binedges[:-1]) / 2
+	# otherwise do geometric mean
+	else:
+		return np.sqrt(binedges[1:] * binedges[:-1])
+
+
+
 # count autocorrelation pairs
 def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., mubins=None):
 	# unpack coordinate tuple
@@ -162,6 +172,7 @@ def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbo
 
 
 # Measure an autocorrelation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
+# the former measures an angular CF, latter a spatial CF
 def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=None,
 						nthreads=1, randcounts=None, estimator='LS', pimax=40., dpi=1., mubins=None,
 						nbootstrap=0, oversample=1, plot_2dcf=False, lims_2dcf=(None, None), wedges=None):
@@ -169,10 +180,11 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 	# number of objects = sum of weights
 	if (weights is not None) and (randweights is not None):
 		n_data, n_rands = np.sum(weights), np.sum(randweights)
+	# if no weights given, weights are 1
 	else:
 		n_data, n_rands = len(coords[0]), len(randcoords[0])
 
-	# if plotting xi(rp, pi), want rp bins and pi bins to match
+	# if plotting xi(rp, pi), want number of rp and pi bins to match
 	if plot_2dcf & (mubins is None):
 		scales = np.linspace(0.1, pimax, int(pimax)+1)
 
@@ -183,34 +195,53 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 	DR_counts = cross_counts(scales, coords, randcoords, weights1=weights, weights2=randweights,
 								nthreads=nthreads, pimax=pimax, mubins=mubins)
 
-	# can optionally send (expensive) random counts from previous run as input
+	# autocorrelation of random points
 	if randcounts is None:
-		# autocorrelation of random points
 		RR_counts = auto_counts(scales, randcoords, weights=randweights, nthreads=nthreads, pimax=pimax, mubins=mubins)
+	# can optionally pass (expensive) random counts from previous run as input
 	else:
 		RR_counts = randcounts
 
+	# prepare dictionary to return as output
 	outdict = {}
 	# calculate correlation function
 	cf = estimators.convert_counts_to_cf(n_data, n_data, n_rands, n_rands, DD_counts, DR_counts,
 									DR_counts, RR_counts, estimator=estimator)
-	# angular correlation function
+
+	# find centers of bins in log or linear space
+	effective_scales = bin_centers(scales)
+
+	# angular correlation function if no redshifts given
 	if coords[2] is None:
+		outdict['theta'] = effective_scales
 		outdict['w_theta'] = cf
 		outdict['w_err_poisson'] = np.sqrt(2 * np.square(1 + cf) / DD_counts['npairs'])
-	# spatial projected correlation function
+
+	# spatial correlation function if redshifts given
 	else:
+		# plot xi(rp, pi) or xi(s, mu) if desired
 		if plot_2dcf:
 			if mubins is None:
 				return plots.plot_2d_corr_func(cf, inputrange=lims_2dcf)
 			else:
 				return plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins, inputrange=lims_2dcf)
-		# if getting projected correlation function wp(rp)
+
+		# if getting projected correlation function wp(rp), and full 2D xi(rp, pi)
 		if mubins is None:
+			# find centers of rp bins
+			outdict['rp'] = effective_scales
+			# integrate xi(rp, pi) over pi to get wp(rp)
 			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
 											pimax=pimax, dpi=dpi)
+			xi_rp_poisson_errs = np.sqrt(2 * np.square(1 + cf)) / DD_counts['npairs']
+			outdict['wp_poisson_err'] = np.sqrt(2 * dpi * estimators.convert_cf_to_wp(np.square(xi_rp_poisson_errs),
+											nrpbins=len(scales)-1, pimax=pimax, dpi=dpi))
+			outdict['xi_rp_pi'] = cf
+			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
+
 		# otherwise get redshift space clustering
 		else:
+			outdict['s'] = effective_scales
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
 
@@ -219,11 +250,15 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 												oversample=oversample, pimax=pimax, estimator=estimator, mubins=mubins,
 												wedges=wedges)
 		realization_variance = np.std(w_realizations, axis=0)
-		if mubins is None:
-			outdict['wp_err'] = realization_variance
-			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+		if coords[2] is None:
+			outdict['w_err'] = realization_variance
+			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
 		else:
-			outdict['mono_err'], outdict['quad_err'] = realization_variance[0], realization_variance[1]
+			if mubins is None:
+				outdict['wp_err'] = realization_variance
+				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+			else:
+				outdict['mono_err'], outdict['quad_err'] = realization_variance[0], realization_variance[1]
 
 	return outdict
 
