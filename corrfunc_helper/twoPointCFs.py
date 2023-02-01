@@ -13,6 +13,7 @@ importlib.reload(plots)
 importlib.reload(estimators)
 
 
+# calculate either logarithmic or linear centers of scale bins
 def bin_centers(binedges):
 	# check if linear
 	if (binedges[2] - binedges[1]) == (binedges[1] - binedges[0]):
@@ -20,7 +21,6 @@ def bin_centers(binedges):
 	# otherwise do geometric mean
 	else:
 		return np.sqrt(binedges[1:] * binedges[:-1])
-
 
 
 # count autocorrelation pairs
@@ -129,26 +129,33 @@ def counts_in_patch(patchval, patchmap, coords, randcoords, weights, randweights
 #
 def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
 							oversample=1, pimax=40., mubins=None, npatches=30, estimator='LS', wedges=None):
+	# split footprint into N patches
 	patchmap = jackknife.bin_on_sky(ras=coords[0], decs=coords[1], npatches=npatches)
 	# get IDs for each patch
 	unique_patchvals = np.unique(patchmap)
 	# remove masked patches
 	unique_patchvals = unique_patchvals[np.where(unique_patchvals > -1e30)]
+
 	part_func = partial(counts_in_patch, patchmap=patchmap,
 						coords=coords, randcoords=randcoords,
 						weights=weights, randweights=randweights, scales=scales, nthreads=nthreads, mubins=mubins)
+
 	# map cores to different patches, count pairs within
 	counts = list(map(part_func, unique_patchvals))
 	counts = np.array(counts)
+
 	# separate out DD, DR, RR counts from returned array
 	dd_counts, dr_counts, rr_counts = counts[:, 0], counts[:, 1], counts[:, 2]
 	ndata, nrands = counts[:, 3], counts[:, 4]
 
-	w_realizations = []
+	# keep track of both the 1D and 2D CFs obtained by each resampling
+	w_realizations, xi_realizations = [], []
+
 	# for each bootstrap, randomly select patches (oversampled by factor of N) and sum counts in those patches
 	for k in range(nbootstrap):
 		# randomly select patches with replacement
 		boot_patches = np.random.choice(np.arange(len(unique_patchvals)), oversample * len(unique_patchvals))
+
 		# sum pairs in those patches
 		bootndata, bootnrands = ndata[boot_patches], nrands[boot_patches]
 		totdata, totrands = np.sum(bootndata) / np.float(oversample), np.sum(bootnrands) / np.float(oversample)
@@ -156,19 +163,22 @@ def bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbo
 													 rr_counts[boot_patches]
 		totddcounts, totdrcounts, totrrcounts = np.sum(boot_ddcounts, axis=0), np.sum(boot_drcounts, axis=0), \
 												np.sum(bootrrcounts, axis=0)
+
 		cf = estimators.convert_counts_to_cf(totdata, totdata, totrands,
 											totrands, totddcounts, totdrcounts, totdrcounts,
 											totrrcounts, estimator=estimator)
 		if coords[2] is None:
 			w_realizations.append(cf)
+			xi_realizations = None
 		else:
+			xi_realizations.append(cf)
 			if mubins is None:
 				w_realizations.append(estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1, pimax=pimax))
 			else:
 				xi_s = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales) - 1, nmubins=mubins, wedges=wedges)
 				#mono, quad = xi_s[0], xi_s[1]
 				w_realizations.append(xi_s)
-	return w_realizations
+	return w_realizations, xi_realizations
 
 
 # Measure an autocorrelation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
@@ -233,9 +243,12 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 			# integrate xi(rp, pi) over pi to get wp(rp)
 			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
 											pimax=pimax, dpi=dpi)
+			# Poisson errors on 2D CF
 			xi_rp_poisson_errs = np.sqrt(2 * np.square(1 + cf)) / DD_counts['npairs']
+			# propogate error to projected clustering (THIS IS CURRENTLY WRONG)
 			outdict['wp_poisson_err'] = np.sqrt(2 * dpi * estimators.convert_cf_to_wp(np.square(xi_rp_poisson_errs),
 											nrpbins=len(scales)-1, pimax=pimax, dpi=dpi))
+			# add 2D CF and Poisson error to output
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
 
@@ -245,20 +258,27 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
 
+
+	# perform bootstrap resampling of patches for uncertainty
 	if nbootstrap > 0:
-		w_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales, nbootstrap, nthreads,
-												oversample=oversample, pimax=pimax, estimator=estimator, mubins=mubins,
-												wedges=wedges)
-		realization_variance = np.std(w_realizations, axis=0)
+		# collect 2D and 3D CF realizations from N different resamplings
+		w_realizations, xi_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales,
+												nbootstrap, nthreads, oversample=oversample, pimax=pimax,
+												estimator=estimator, mubins=mubins, wedges=wedges)
+		# error estimate is variance of realizations
+		w_realization_variance = np.std(w_realizations, axis=0)
+
 		if coords[2] is None:
-			outdict['w_err'] = realization_variance
+			outdict['w_err'] = w_realization_variance
 			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
 		else:
+			xi_realization_variance = np.std(xi_realizations, axis=0)
 			if mubins is None:
-				outdict['wp_err'] = realization_variance
+				outdict['wp_err'] = w_realization_variance
+				outdict['xi_rp_pi_err'] = xi_realization_variance
 				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
 			else:
-				outdict['mono_err'], outdict['quad_err'] = realization_variance[0], realization_variance[1]
+				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
 
 	return outdict
 
