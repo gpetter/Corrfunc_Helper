@@ -12,6 +12,14 @@ import importlib
 importlib.reload(plots)
 importlib.reload(estimators)
 
+def parse_weights(numcoords, weights):
+	if weights is not None:
+		n = np.sum(weights)
+	else:
+		n = numcoords
+	return n
+
+
 
 # calculate either logarithmic or linear centers of scale bins
 def bin_centers(binedges):
@@ -225,6 +233,7 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 	if coords[2] is None:
 		outdict['theta'] = effective_scales
 		outdict['w_theta'] = cf
+		# Poisson error e.g. Dipompeo et al. 2017
 		outdict['w_err_poisson'] = np.sqrt(2 * np.square(1 + cf) / DD_counts['npairs'])
 
 	# spatial correlation function if redshifts given
@@ -244,8 +253,15 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
 											pimax=pimax, dpi=dpi)
 			# Poisson errors on 2D CF
-			xi_rp_poisson_errs = np.sqrt(2 * np.square(1 + cf)) / DD_counts['npairs']
-			# propogate error to projected clustering (THIS IS CURRENTLY WRONG)
+			# if N_pairs > N_data points (at large scales), use minimum of the two to get Poisson errors
+			# e.g. Shen et al 2007
+			mincounts = np.min([np.array(DD_counts['npairs']), len(coords[0]) * np.ones_like(DD_counts['npairs'])], axis=0)
+			# when number of counts in a bin == 0, poisson uncertainty is infinite.
+			# 0 +/- 1 is approximate, but use caution
+			# where N_pair==0, set to 1, as sqrt(1) = 1
+			mincounts[np.where(mincounts == 0)] = 1
+			xi_rp_poisson_errs = np.sqrt(2 * np.square(1 + cf) / mincounts)
+			# propogate Poisson error on xi(rp, pi) to projected clustering
 			outdict['wp_poisson_err'] = np.sqrt(2 * dpi * estimators.convert_cf_to_wp(np.square(xi_rp_poisson_errs),
 											nrpbins=len(scales)-1, pimax=pimax, dpi=dpi))
 			# add 2D CF and Poisson error to output
@@ -282,6 +298,120 @@ def autocorr_from_coords(coords, randcoords, scales, weights=None, randweights=N
 
 	return outdict
 
+
+
+
+def crosscorr_from_coords(coords1, coords2, randcoords1, randcoords2, scales, weights1=None,
+						weights2=None, randweights1=None, randweights2=None,
+						nthreads=1, estimator='LS', pimax=40., dpi=1., mubins=None,
+						nbootstrap=0, oversample=1, plot_2dcf=False, lims_2dcf=(None, None), wedges=None):
+
+	n_data1, n_rands1 = parse_weights(len(coords1[0]), weights1), parse_weights(len(randcoords1[0]), randweights1)
+	n_data2, n_rands2 = parse_weights(len(coords2[0]), weights2), parse_weights(len(randcoords2[0]), randweights2)
+
+	# if plotting xi(rp, pi), want number of rp and pi bins to match
+	if plot_2dcf & (mubins is None):
+		scales = np.linspace(0.1, pimax, int(pimax)+1)
+
+	# cross correlation of data points
+	D1D2_counts = cross_counts(scales, coords1, coords2,
+							weights1=weights1, weights2=weights2,
+							nthreads=nthreads, pimax=pimax, mubins=mubins)
+
+	# cross correlation between first data and second random catalogs
+	D1R2_counts = cross_counts(scales, coords1, randcoords2, weights1=weights1, weights2=randweights2,
+							nthreads=nthreads, pimax=pimax, mubins=mubins)
+
+	if estimator == 'Peebles':
+		# cross correlation between second data and first random catalogs
+		D2R1_counts = cross_counts(scales, coords2, randcoords1, weights1=weights2, weights2=randweights1,
+								nthreads=nthreads, pimax=pimax, mubins=mubins)
+
+		R1R2_counts = cross_counts(scales, randcoords1, randcoords2, weights1=randweights1, weights2=randweights2,
+								nthreads=nthreads, pimax=pimax, mubins=mubins)
+	else:
+		D2R1_counts, R1R2_counts = None, None
+
+
+	# prepare dictionary to return as output
+	outdict = {}
+	# calculate correlation function
+	cf = estimators.convert_counts_to_cf(n_data1, n_data2, n_rands1, n_rands2, D1D2_counts, D1R2_counts,
+									D2R1_counts, R1R2_counts, estimator=estimator)
+
+	# find centers of bins in log or linear space
+	effective_scales = bin_centers(scales)
+
+	# angular correlation function if no redshifts given
+	if coords1[2] is None:
+		outdict['theta'] = effective_scales
+		outdict['w_theta'] = cf
+		# Poisson error e.g. Dipompeo et al. 2017
+		outdict['w_err_poisson'] = np.sqrt(1 * np.square(1 + cf) / D1D2_counts['npairs'])
+
+	# spatial correlation function if redshifts given
+	else:
+		# plot xi(rp, pi) or xi(s, mu) if desired
+		if plot_2dcf:
+			if mubins is None:
+				return plots.plot_2d_corr_func(cf, inputrange=lims_2dcf)
+			else:
+				return plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins, inputrange=lims_2dcf)
+
+		# if getting projected correlation function wp(rp), and full 2D xi(rp, pi)
+		if mubins is None:
+			# find centers of rp bins
+			outdict['rp'] = effective_scales
+			# integrate xi(rp, pi) over pi to get wp(rp)
+			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
+											pimax=pimax, dpi=dpi)
+			# Poisson errors on 2D CF
+			# if N_pairs > N_data points (at large scales), use minimum of the two to get Poisson errors
+			# e.g. Shen et al 2007
+			mincounts = np.min([np.array(D1D2_counts['npairs']),
+								len(coords1[0]) * np.ones_like(D1D2_counts['npairs']),
+								len(coords2[0]) * np.ones_like(D1D2_counts['npairs'])], axis=0)
+			# when number of counts in a bin == 0, poisson uncertainty is infinite.
+			# 0 +/- 1 is approximate, but use caution
+			# where N_pair==0, set to 1, as sqrt(1) = 1
+			mincounts[np.where(mincounts == 0)] = 1
+			xi_rp_poisson_errs = np.sqrt(2 * np.square(1 + cf) / mincounts)
+			# propogate Poisson error on xi(rp, pi) to projected clustering
+			outdict['wp_poisson_err'] = np.sqrt(2 * dpi * estimators.convert_cf_to_wp(np.square(xi_rp_poisson_errs),
+											nrpbins=len(scales)-1, pimax=pimax, dpi=dpi))
+			# add 2D CF and Poisson error to output
+			outdict['xi_rp_pi'] = cf
+			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
+
+		# otherwise get redshift space clustering
+		else:
+			outdict['s'] = effective_scales
+			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
+			outdict['mono'], outdict['quad'] = w[0], w[1]
+
+
+	# perform bootstrap resampling of patches for uncertainty
+	if nbootstrap > 0:
+		# collect 2D and 3D CF realizations from N different resamplings
+		w_realizations, xi_realizations = bootstrap_realizations(coords, randcoords, weights, randweights, scales,
+												nbootstrap, nthreads, oversample=oversample, pimax=pimax,
+												estimator=estimator, mubins=mubins, wedges=wedges)
+		# error estimate is variance of realizations
+		w_realization_variance = np.std(w_realizations, axis=0)
+
+		if coords[2] is None:
+			outdict['w_err'] = w_realization_variance
+			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
+		else:
+			xi_realization_variance = np.std(xi_realizations, axis=0)
+			if mubins is None:
+				outdict['wp_err'] = w_realization_variance
+				outdict['xi_rp_pi_err'] = xi_realization_variance
+				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+			else:
+				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
+
+	return outdict
 
 # angular cross correlation
 def cross_corr_from_coords(coords, refcoords, randcoords, scales, refrandcoords=None, weights=None,
