@@ -4,7 +4,8 @@ from sklearn import cluster
 
 
 # split sample into N jackknife regions using K-means clustering
-def bin_on_sky(ras, decs, npatches, nsides=64):
+def bin_on_sky(randcoords, npatches, nsides=16):
+	ras, decs, foo = randcoords
 	# healpix pixels with sources in them
 	occupiedpix = hp.ang2pix(nside=nsides, theta=ras, phi=decs, lonlat=True)
 	# get rid of repeats

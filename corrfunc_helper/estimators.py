@@ -1,5 +1,5 @@
 import numpy as np
-# edited code from Corrfunc code to allow Peebles estimator of correlation function
+# edited code from Corrfunc to allow Peebles estimator of correlation function
 
 
 # convert either angular or spatial counts to correlation function
@@ -10,30 +10,32 @@ def convert_counts_to_cf(ND1, ND2, NR1, NR2,
 
 	pair_counts = dict()
 
-	fields = ['D1D2', 'D1R2', 'D2R1', 'R1R2']
-	arrays = [D1D2, D1R2, D2R1, R1R2]
-	for (field, array) in zip(fields, arrays):
-		try:
-
-			if np.max(array['weightavg']) > 0:
-				npairs = array['npairs'] * array['weightavg']
-
-			else:
-				npairs = array['npairs']
-			pair_counts[field] = npairs
-
-		except IndexError:
-			pair_counts[field] = array
-
-	nbins = len(pair_counts['D1D2'])
-	if (nbins != len(pair_counts['D1R2'])) or \
-			(nbins != len(pair_counts['D2R1'])) or \
-			(nbins != len(pair_counts['R1R2'])):
-		msg = 'Pair counts must have the same number of elements (same bins)'
-		raise ValueError(msg)
-
-	nonzero = pair_counts['R1R2'] > 0
 	if 'LS' in estimator or 'Landy' in estimator:
+
+		fields = ['D1D2', 'D1R2', 'D2R1', 'R1R2']
+		arrays = [D1D2, D1R2, D2R1, R1R2]
+		for (field, array) in zip(fields, arrays):
+			try:
+
+				if np.max(array['weightavg']) > 0:
+					npairs = array['npairs'] * array['weightavg']
+
+				else:
+					npairs = array['npairs']
+				pair_counts[field] = npairs
+
+			except IndexError:
+				pair_counts[field] = array
+
+		nbins = len(pair_counts['D1D2'])
+		if (nbins != len(pair_counts['D1R2'])) or \
+				(nbins != len(pair_counts['D2R1'])) or \
+				(nbins != len(pair_counts['R1R2'])):
+			msg = 'Pair counts must have the same number of elements (same bins)'
+			raise ValueError(msg)
+
+		nonzero = pair_counts['R1R2'] > 0
+
 		fN1 = np.float(NR1) / np.float(ND1)
 		fN2 = np.float(NR2) / np.float(ND2)
 		cf = np.zeros(nbins)
@@ -48,6 +50,28 @@ def convert_counts_to_cf(ND1, ND2, NR1, NR2,
 					'={0} bins in (wrong) calculated correlation = {1}'.format(nbins, len(cf))
 			raise RuntimeError(msg)
 	elif estimator == 'Peebles':
+
+		fields = ['D1D2', 'D2R1']
+		arrays = [D1D2, D2R1]
+		for (field, array) in zip(fields, arrays):
+			try:
+
+				if np.max(array['weightavg']) > 0:
+					npairs = array['npairs'] * array['weightavg']
+
+				else:
+					npairs = array['npairs']
+				pair_counts[field] = npairs
+
+			except IndexError:
+				pair_counts[field] = array
+
+		nbins = len(pair_counts['D1D2'])
+		if nbins != len(pair_counts['D2R1']):
+			msg = 'Pair counts must have the same number of elements (same bins)'
+			raise ValueError(msg)
+
+		nonzero = pair_counts['D2R1'] > 0
 		fN1 = np.float(NR1) / np.float(ND1)
 
 		cf = np.zeros(nbins)
