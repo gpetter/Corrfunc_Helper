@@ -397,7 +397,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 	randcoords1, randcoords2 = parse_coords(randcoords1), parse_coords(randcoords2)
 
 	n_data1, n_rands1 = parse_weights(len(coords1[0]), weights1), parse_weights(len(randcoords1[0]), randweights1)
-	n_data2, n_rands2 = parse_weights(len(coords2[0]), weights2), parse_weights(len(randcoords2[0]), randweights2)
+	n_data2, n_rands2 = parse_weights(len(coords2[0]), weights2), None
 
 	# if plotting xi(rp, pi), want number of rp and pi bins to match
 	if plot_2dcf & (mubins is None):
@@ -413,6 +413,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 							nthreads=nthreads, pimax=pimax, mubins=mubins)
 
 	if estimator == 'LS':
+		n_rands2 = parse_weights(len(randcoords2[0]), randweights2)
 		# cross correlation between second data and first random catalogs
 		D1R2_counts = cross_counts(scales, coords1, randcoords2, weights1=weights1, weights2=randweights2,
 								nthreads=nthreads, pimax=pimax, mubins=mubins)
