@@ -126,7 +126,7 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 def counts_in_patch(patchval, patchmap, scales, nthreads,
 					coords1, randcoords1, weights1, randweights1,
 					coords2, randcoords2, weights2, randweights2,
-					mubins, estimator):
+					mubins, estimator, pimax):
 	nside = hp.npix2nside(len(patchmap))
 
 	# unpack coordinates
@@ -153,15 +153,17 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 	# if doing autocorrelation
 	if coords2 is None:
 		n_data2, n_rands2 = n_data1, n_rands1
-		d1d2counts = auto_counts(scales, coords1, weights1, nthreads=nthreads, fulldict=False, mubins=mubins)
+		d1d2counts = auto_counts(scales, coords1, weights1, nthreads=nthreads, fulldict=False,
+								pimax=pimax, mubins=mubins)
 		d1r2counts = cross_counts(scales, coords1, randcoords1, weights1, randweights1, nthreads=nthreads,
-								fulldict=False, mubins=mubins)
+								fulldict=False, pimax=pimax, mubins=mubins)
 		# data-random cross counts are symmetric
 		d2r1counts = d1r2counts
 
 		# only count random-random pairs if using Landy-Szalay estimator
 		if estimator == 'LS':
-			r1r2counts = auto_counts(scales, randcoords1, randweights1, nthreads=nthreads, fulldict=False, mubins=mubins)
+			r1r2counts = auto_counts(scales, randcoords1, randweights1, nthreads=nthreads, fulldict=False,
+									pimax=pimax, mubins=mubins)
 		else:
 			r1r2counts = np.zeros_like(d1d2counts)
 	# otherwise a cross correlation
@@ -177,10 +179,10 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 
 		# do cross correlations
 		d1d2counts = cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=nthreads,
-								fulldict=False, mubins=mubins)
+								fulldict=False, pimax=pimax, mubins=mubins)
 		# only required to have one random catalog
 		d2r1counts = cross_counts(scales, coords2, randcoords1, weights2, randweights1, nthreads=nthreads,
-								fulldict=False, mubins=mubins)
+								fulldict=False, pimax=pimax, mubins=mubins)
 		d1r2counts, r1r2counts = np.zeros_like(d1d2counts), np.zeros_like(d1d2counts)
 		# if using LS estimator
 		if estimator == 'LS':
@@ -194,9 +196,9 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 				n_rands2 = parse_weights(len(randweights2), randweights2)
 
 			d1r2counts = cross_counts(scales, coords1, randcoords2, weights1, randweights2, nthreads=nthreads,
-								fulldict=False, mubins=mubins)
+								fulldict=False, pimax=pimax, mubins=mubins)
 			r1r2counts = cross_counts(scales, randcoords1, randcoords2, randweights1, randweights2, nthreads=nthreads,
-								fulldict=False, mubins=mubins)
+								fulldict=False, pimax=pimax, mubins=mubins)
 
 	return [d1d2counts, d1r2counts, d2r1counts, r1r2counts, n_data1, n_rands1, n_data2, n_rands2]
 
@@ -218,7 +220,7 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 						weights1=weights1, randweights1=randweights1,
 						coords2=coords2, randcoords2=randcoords2,
 						weights2=weights2, randweights2=randweights2,
-						mubins=mubins, estimator=estimator)
+						mubins=mubins, estimator=estimator, pimax=pimax)
 
 	# map cores to different patches, count pairs within
 	counts = list(map(part_func, unique_patchvals))

@@ -57,6 +57,7 @@ def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None)):
 
 	fig, ax = plt.subplots(figsize=(8, 8))
 	outputrange = (np.amin(qqs), np.amax(qqs))
+	halfwidth = float(nbins)
 
 	if setnegszero:
 		# Get bin coordinates
@@ -66,8 +67,10 @@ def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None)):
 		pc = ax.pcolor(x,y,qqs,cmap='jet', vmin=inputrange[0], vmax=inputrange[1])
 		# Plot contours
 		lev = np.linspace(np.amin(qqs),np.amax(qqs),15)
-		ax.contour(x[0:-1,0:-1], y[0:-1,0:-1], qqs, levels=lev, colors='k',
-					linestyles='solid', linewidths=1)
+		ax.contour(np.linspace(-halfwidth, halfwidth, 2*nbins),
+				np.linspace(-halfwidth, halfwidth, 2*nbins),
+				qqs, levels=lev, colors='k',
+				linestyles='solid', linewidths=1)
 	else:
 		plotxs = np.arange(-nbins, nbins)
 		pc = ax.contourf(plotxs, plotxs, qqs)
@@ -105,12 +108,14 @@ def xi_mu_s_plot(cf, nsbins, nmubins, inputrange=(None, None)):
 	outputrange = (np.amin(qqs), np.amax(qqs))
 	fig, ax = plt.subplots(figsize=(8, 8))
 	x, y = np.meshgrid(np.linspace(1, 0, nbins+1), np.arange(0, nbins+1))
+	halfwidth = float(nbins)
 
 	# Plot array
 	pc = ax.pcolor(x, y, qqs, cmap='jet', vmin=inputrange[0], vmax=inputrange[1])
 	# Plot contours
 	lev = np.linspace(np.amin(qqs), np.amax(qqs), 15)
-	ax.contour(x[0:-1, 0:-1], y[0:-1, 0:-1], qqs, levels=lev, colors='k', linestyles='solid', linewidths=1)
+	ax.contour(np.linspace(-halfwidth, halfwidth, 2*nbins), np.linspace(-halfwidth, halfwidth, 2*nbins),
+			qqs, levels=lev, colors='k', linestyles='solid', linewidths=1)
 	ax.invert_xaxis()
 	divider = make_axes_locatable(ax)
 	cax = divider.append_axes('right', size='5%', pad=0.05)
