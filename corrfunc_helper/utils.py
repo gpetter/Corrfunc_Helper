@@ -12,3 +12,22 @@ def match_random_zdist(samplecat, randomcat, zbins, n_rand2n_dat=10):
 											replace=False,
 											p=(sampleweights / np.sum(sampleweights)))]
 	return subrandcat
+
+
+def process_catalog(cat):
+	ra, dec = cat['RA'], cat['DEC']
+	try:
+		chi = cat['CHI']
+	except:
+		print('No distances given, doing angular clustering')
+		chi = None
+
+	try:
+		weight = cat['weight']
+	except:
+		print('No weights given')
+		weight = None
+
+	coord = (ra, dec, chi)
+	return coord, weight
+

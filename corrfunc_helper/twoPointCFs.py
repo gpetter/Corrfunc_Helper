@@ -7,6 +7,7 @@ import numpy as np
 import healpy as hp
 from . import jackknife
 from . import plots
+from . import utils
 from functools import partial
 
 coord_dict = {'RA': 0, 'DEC': 1, 'CHI': 2}
@@ -274,7 +275,7 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 # the former measures an angular CF, latter a spatial CF
 def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=None,
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
-						nbootstrap=0, oversample=1, plot_2dcf=False, lims_2dcf=(None, None), wedges=None):
+						nbootstrap=0, oversample=1, wedges=None):
 	if nthreads is None:
 		nthreads = get_nthreads()
 	coords, randcoords = parse_coords(coords), parse_coords(randcoords)
@@ -285,10 +286,6 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 	# if no weights given, weights are 1
 	else:
 		n_data, n_rands = len(coords[0]), len(randcoords[0])
-
-	# if plotting xi(rp, pi), want number of rp and pi bins to match
-	if plot_2dcf & (mubins is None):
-		scales = np.linspace(0.1, pimax, int(pimax)+1)
 
 	# autocorrelation of catalog
 	DD_counts = auto_counts(scales, coords, weights=weights, nthreads=nthreads, pimax=pimax, mubins=mubins)
@@ -315,23 +312,19 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 
 	# angular correlation function if no redshifts given
 	if coords[2] is None:
+		outdict['theta_bins'] = scales
 		outdict['theta'] = effective_scales
 		outdict['w_theta'] = cf
 		# Poisson error e.g. Dipompeo et al. 2017
 		outdict['w_err_poisson'] = np.sqrt(2 * np.square(1 + cf) / DD_counts['npairs'])
+		outdict['plot'] = plots.w_theta_plot(outdict)
 
 	# spatial correlation function if redshifts given
 	else:
-		# plot xi(rp, pi) or xi(s, mu) if desired
-		if plot_2dcf:
-			if mubins is None:
-				return plots.plot_2d_corr_func(cf, inputrange=lims_2dcf)
-			else:
-				return plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins, inputrange=lims_2dcf)
-
 		# if getting projected correlation function wp(rp), and full 2D xi(rp, pi)
 		if mubins is None:
 			# find centers of rp bins
+			outdict['rp_bins'] = scales
 			outdict['rp'] = effective_scales
 			# integrate xi(rp, pi) over pi to get wp(rp)
 			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
@@ -351,6 +344,11 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			# add 2D CF and Poisson error to output
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
+			outdict['plot'] = plots.wp_rp_plot(outdict)
+			try:
+				outdict['2dplot'] = plots.plot_2d_corr_func(cf)
+			except:
+				print()
 
 
 		# otherwise get redshift space clustering
@@ -358,6 +356,10 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			outdict['s'] = effective_scales
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
+			try:
+				outdict['2dplot'] = plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins)
+			except:
+				print()
 
 
 	# perform bootstrap resampling of patches for uncertainty
@@ -394,7 +396,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=None, weights1=None,
 						weights2=None, randweights1=None, randweights2=None,
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
-						nbootstrap=0, oversample=1, plot_2dcf=False, lims_2dcf=(None, None), wedges=None):
+						nbootstrap=0, oversample=1, wedges=None):
 	if nthreads is None:
 		nthreads = get_nthreads()
 
@@ -403,10 +405,6 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 	n_data1, n_rands1 = parse_weights(len(coords1[0]), weights1), parse_weights(len(randcoords1[0]), randweights1)
 	n_data2, n_rands2 = parse_weights(len(coords2[0]), weights2), None
-
-	# if plotting xi(rp, pi), want number of rp and pi bins to match
-	if plot_2dcf & (mubins is None):
-		scales = np.linspace(0.1, pimax, int(pimax)+1)
 
 	# cross correlation of data points
 	D1D2_counts = cross_counts(scales, coords1, coords2,
@@ -447,12 +445,6 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 	# spatial correlation function if redshifts given
 	else:
-		# plot xi(rp, pi) or xi(s, mu) if desired
-		if plot_2dcf:
-			if mubins is None:
-				return plots.plot_2d_corr_func(cf, inputrange=lims_2dcf)
-			else:
-				return plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins, inputrange=lims_2dcf)
 
 		# if getting projected correlation function wp(rp), and full 2D xi(rp, pi)
 		if mubins is None:
@@ -478,12 +470,20 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 			# add 2D CF and Poisson error to output
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
+			try:
+				outdict['2dplot'] = plots.plot_2d_corr_func(cf)
+			except:
+				print()
 
 		# otherwise get redshift space clustering
 		else:
 			outdict['s'] = effective_scales
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
+			try:
+				outdict['2dplot'] = plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins)
+			except:
+				print()
 
 
 	# perform bootstrap resampling of patches for uncertainty
@@ -512,3 +512,61 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 	return outdict
 
+
+def autocorr_cat(scales, datcat, randcat, nthreads=None, estimator='LS', pimax=40.,
+				  dpi=1., mubins=None, nbootstrap=0, oversample=1,
+				  wedges=None):
+	"""
+	Utility to save a couple lines by automatically extracting necessary info from input catalogs for clustering
+
+	:param scales: array, same as above
+	:param datcat: astropy table, data catalog with RA, DEC, optional CHI, weight columns
+	:param randcat: astropy table, data catalog with RA, DEC, optional CHI, weight columns
+	:return:
+	autocorrelation function statistics for the given catalog
+	"""
+	coord, weight = utils.process_catalog(datcat)
+	randcoord, randweight = utils.process_catalog(randcat)
+
+	cf = autocorr_from_coords(scales, coord, randcoord, weights=weight, randweights=randweight,
+								nthreads=nthreads, estimator=estimator, pimax=pimax, dpi=dpi,
+								mubins=mubins, nbootstrap=nbootstrap, oversample=oversample,
+								wedges=wedges)
+	return cf
+
+def crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None, nthreads=None, estimator='LS', pimax=40.,
+				  dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None):
+	coord1, weight1 = utils.process_catalog(datcat1)
+	coord2, weight2 = utils.process_catalog(datcat2)
+	randcoord1, randweight1 = utils.process_catalog(randcat1)
+	randcoord2 = None
+	if randcat2 is not None:
+		randcoord2, randweight2 = utils.process_catalog(randcat2)
+
+	cf = crosscorr_from_coords(scales=scales, coords1=coord1, coords2=coord2, randcoords1=randcoord1,
+								randcoords2=randcoord2, weights1=weight1,
+								weights2=weight2, randweights1=randweight1, randweights2=randweight2,
+								nthreads=nthreads, estimator=estimator, pimax=pimax, dpi=dpi, mubins=mubins,
+								nbootstrap=nbootstrap, oversample=oversample, wedges=wedges)
+	return cf
+
+
+def auto_and_crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None,
+							nthreads=None, estimator='LS', pimax=40.,
+							dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None):
+	"""
+	Do autocorrelation of a reference sample as well as cross correlation of that sample with another
+	Useful when needing to measure bias of reference sample, and the cross bias simultaneously
+	:return:
+	"""
+
+	autocf = autocorr_cat(scales, datcat1, randcat1, nthreads=nthreads,
+							estimator=estimator, pimax=pimax,
+							dpi=dpi, mubins=mubins, nbootstrap=nbootstrap,
+							oversample=oversample, wedges=wedges)
+
+	crosscf = crosscorr_cats(scales, datcat1, datcat2, randcat1,
+							randcat2=randcat2, nthreads=nthreads,
+							estimator=estimator, pimax=pimax, dpi=dpi, mubins=mubins,
+							nbootstrap=nbootstrap, oversample=oversample, wedges=wedges)
+	return autocf, crosscf

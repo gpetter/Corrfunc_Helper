@@ -92,8 +92,74 @@ def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None)):
 
 	ax.set_xlabel('$r_{p}$', fontsize=30)
 	ax.set_ylabel('$\pi$', fontsize=30)
+	plt.close()
 
-	return ax, outputrange
+	return fig
+
+
+def plotmultiple_2d_corr_func(cfs, setnegszero=True, inputrange=(None, None)):
+	if len(cfs) > 5:
+		cfs = [cfs]
+	fig, ax = plt.subplots(figsize=(len(cfs) * 8, 8), ncols=len(cfs))
+
+	smoothcf = []
+	for j in range(len(cfs)):
+		thiscf = cfs[j]
+		nbins = int(np.sqrt(len(thiscf)))
+		cf2d = np.reshape(np.array(thiscf), (-1, nbins))
+
+		logxi = np.log10(cf2d)
+		qTR = logxi.copy()
+		if setnegszero:
+			qTR[~np.isfinite(qTR)] = 0
+		qTR = qTR.T  # top right quadrant
+		qTL = np.fliplr(qTR)  # top left quadrant
+		qBL = np.flipud(qTL)  # bottom left quadrant
+		qBR = np.fliplr(qBL)  # bottom right quadrant
+		qT = np.hstack((qTL, qTR))  # top half
+		qB = np.hstack((qBL, qBR))  # bottom half
+		qq = np.vstack((qB, qT))  # full array
+		if setnegszero:
+			qqs = smooth(qq, n=8)  # smoothed full array
+		else:
+			qqs = qq
+		smoothcf.append(qqs)
+	maxval, minval = np.max(smoothcf), np.min(smoothcf)
+
+	outputrange = (minval, maxval)
+	halfwidth = float(nbins)
+
+	for j in range(len(cfs)):
+		if len(cfs) == 1:
+			thisax = ax
+		else:
+			thisax = ax[j]
+
+		if setnegszero:
+			# Get bin coordinates
+			x, y = np.meshgrid(np.arange(-nbins, nbins + 1), np.arange(-nbins, nbins + 1))
+
+			# Plot array
+			pc = thisax.pcolor(x, y, smoothcf[j], cmap='jet', vmin=inputrange[0], vmax=inputrange[1])
+			# Plot contours
+			lev = np.linspace(np.amin(smoothcf[j]), np.amax(qqs), 15)
+			thisax.contour(np.linspace(-halfwidth, halfwidth, 2 * nbins),
+						   np.linspace(-halfwidth, halfwidth, 2 * nbins),
+						   smoothcf[j], levels=lev, colors='k',
+						   linestyles='solid', linewidths=1)
+		else:
+			plotxs = np.arange(-nbins, nbins)
+			pc = ax.contourf(plotxs, plotxs, smoothcf[j])
+		thisax.set_xlabel('$r_{p}$', fontsize=30)
+		thisax.set_ylabel('$\pi$', fontsize=30)
+
+	divider = make_axes_locatable(thisax)
+	cax = divider.append_axes('right', size='5%', pad=0.05)
+	fig.colorbar(pc, cax=cax, orientation='vertical', label=r'log $\xi(r_{p}, \pi)$')
+
+	plt.close()
+
+	return fig
 
 def xi_mu_s_plot(cf, nsbins, nmubins, inputrange=(None, None)):
 
@@ -130,31 +196,37 @@ def xi_mu_s_plot(cf, nsbins, nmubins, inputrange=(None, None)):
 def w_theta_plot(cf):
 	fig, ax = plt.subplots(figsize=(8, 6))
 	ax.scatter(cf['theta'], cf['w_theta'], c='k')
-	ax.errorbar(cf['theta'], cf['w_theta'], yerr=cf['w_err'], fmt='none', ecolor='k')
-	baderrs = np.where((np.logical_not(np.isfinite(cf['w_err']))) | (cf['w_err'] == 0))[0]
-	if len(baderrs) > 0:
-		ax.errorbar(cf['theta'][baderrs], cf['w_theta'][baderrs],
-					yerr=cf['w_poisson_err'][baderrs], fmt='none', ecolor='r')
+	try:
+		ax.errorbar(cf['theta'], cf['w_theta'], yerr=cf['w_err'], fmt='none', ecolor='k')
+	except:
+		ax.errorbar(cf['theta'], cf['w_theta'], yerr=cf['w_err_poisson'], fmt='none', ecolor='k')
+	#baderrs = np.where((np.logical_not(np.isfinite(cf['w_err']))) | (cf['w_err'] == 0))[0]
+	#if len(baderrs) > 0:
+	#	ax.errorbar(cf['theta'][baderrs], cf['w_theta'][baderrs],
+	#				yerr=cf['w_poisson_err'][baderrs], fmt='none', ecolor='r')
 
 	ax.set_xscale('log')
 	ax.set_yscale('log')
-	ax.set_xlabel('$r_p$', fontsize=20)
-	ax.set_ylabel('$w_p$', fontsize=20)
+	ax.set_xlabel(r'$\theta$ [deg]', fontsize=20)
+	ax.set_ylabel(r'$w(\theta)$', fontsize=20)
 	plt.close()
 	return fig
 
 def wp_rp_plot(cf):
 	fig, ax = plt.subplots(figsize=(8, 6))
 	ax.scatter(cf['rp'], cf['wp'], c='k')
-	ax.errorbar(cf['rp'], cf['wp'], yerr=cf['wp_err'], fmt='none', ecolor='k')
-	baderrs = np.where((np.logical_not(np.isfinite(cf['wp_err']))) | (cf['wp_err'] == 0))[0]
-	if len(baderrs) > 0:
-		ax.errorbar(cf['rp'][baderrs], cf['wp'][baderrs],
-					yerr=cf['wp_poisson_err'][baderrs], fmt='none', ecolor='r')
+	try:
+		ax.errorbar(cf['rp'], cf['wp'], yerr=cf['wp_err'], fmt='none', ecolor='k')
+	except:
+		ax.errorbar(cf['rp'], cf['wp'], yerr=cf['wp_poisson_err'], fmt='none', ecolor='k')
+	#baderrs = np.where((np.logical_not(np.isfinite(cf['wp_err']))) | (cf['wp_err'] == 0))[0]
+	#if len(baderrs) > 0:
+	#	ax.errorbar(cf['rp'][baderrs], cf['wp'][baderrs],
+	#				yerr=cf['wp_poisson_err'][baderrs], fmt='none', ecolor='r')
 
 	ax.set_xscale('log')
 	ax.set_yscale('log')
-	ax.set_xlabel('$r_p$', fontsize=20)
+	ax.set_xlabel('$r_p [\mathrm{Mpc}/h]$', fontsize=20)
 	ax.set_ylabel('$w_p$', fontsize=20)
 	plt.close()
 	return fig
