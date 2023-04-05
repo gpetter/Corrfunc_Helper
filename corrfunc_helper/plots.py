@@ -125,3 +125,36 @@ def xi_mu_s_plot(cf, nsbins, nmubins, inputrange=(None, None)):
 	ax.set_ylabel('$s / (h^{-1}$ Mpc)', fontsize=30)
 
 	return ax, outputrange
+
+
+def w_theta_plot(cf):
+	fig, ax = plt.subplots(figsize=(8, 6))
+	ax.scatter(cf['theta'], cf['w_theta'], c='k')
+	ax.errorbar(cf['theta'], cf['w_theta'], yerr=cf['w_err'], fmt='none', ecolor='k')
+	baderrs = np.where((np.logical_not(np.isfinite(cf['w_err']))) | (cf['w_err'] == 0))[0]
+	if len(baderrs) > 0:
+		ax.errorbar(cf['theta'][baderrs], cf['w_theta'][baderrs],
+					yerr=cf['w_poisson_err'][baderrs], fmt='none', ecolor='r')
+
+	ax.set_xscale('log')
+	ax.set_yscale('log')
+	ax.set_xlabel('$r_p$', fontsize=20)
+	ax.set_ylabel('$w_p$', fontsize=20)
+	plt.close()
+	return fig
+
+def wp_rp_plot(cf):
+	fig, ax = plt.subplots(figsize=(8, 6))
+	ax.scatter(cf['rp'], cf['wp'], c='k')
+	ax.errorbar(cf['rp'], cf['wp'], yerr=cf['wp_err'], fmt='none', ecolor='k')
+	baderrs = np.where((np.logical_not(np.isfinite(cf['wp_err']))) | (cf['wp_err'] == 0))[0]
+	if len(baderrs) > 0:
+		ax.errorbar(cf['rp'][baderrs], cf['wp'][baderrs],
+					yerr=cf['wp_poisson_err'][baderrs], fmt='none', ecolor='r')
+
+	ax.set_xscale('log')
+	ax.set_yscale('log')
+	ax.set_xlabel('$r_p$', fontsize=20)
+	ax.set_ylabel('$w_p$', fontsize=20)
+	plt.close()
+	return fig

@@ -352,6 +352,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
 
+
 		# otherwise get redshift space clustering
 		else:
 			outdict['s'] = effective_scales
@@ -374,12 +375,14 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 		if coords[2] is None:
 			outdict['w_err'] = w_realization_variance
 			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
+			outdict['plot'] = plots.w_theta_plot(outdict)
 		else:
 			xi_realization_variance = np.std(xi_realizations, axis=0)
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
 				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+				outdict['plot'] = plots.wp_rp_plot(outdict)
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
 
