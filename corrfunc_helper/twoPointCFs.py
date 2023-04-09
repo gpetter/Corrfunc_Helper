@@ -10,10 +10,14 @@ from . import plots
 from . import utils
 from functools import partial
 
+# ordering of coordinate object
 coord_dict = {'RA': 0, 'DEC': 1, 'CHI': 2}
 
 
 def parse_coords(coords):
+	"""
+	coord expected to be a 3-tuple. If only doing an angular measurement, append None for the distance column
+	"""
 	if coords is not None:
 		if len(coords) == 2:
 			coords = coords[0], coords[1], None
@@ -21,6 +25,11 @@ def parse_coords(coords):
 
 
 def parse_weights(numcoords, weights):
+	"""
+	Normalizing a correlation function requires number of data and random points
+	If data/randoms are weighted, want a sum of weights rather than a count of coordinates
+	:return: int, number of points
+	"""
 	if weights is not None:
 		n = np.sum(weights)
 	else:
@@ -38,6 +47,10 @@ def index_tuple(mytuple, idxs):
 
 
 def get_nthreads():
+	"""
+	count number of available threads for Corrfunc to take advantage of
+	:return:
+	"""
 	return os.cpu_count()
 
 
@@ -53,8 +66,20 @@ def bin_centers(binedges):
 
 # count autocorrelation pairs
 def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., mubins=None):
-	# unpack coordinate tuple
-	# third entry should be None if you only want angular counts
+	"""
+	Measure autocorrelation counts of a sample
+
+	:param scales: array, bin edges in degrees for angular, or Mpc/h for spatial
+	:param coords: 3 tuple of RA, DEC, Optional comoving distance
+	:param weights: array
+	:param nthreads: int
+	:param fulldict: bool, if True, return the full dictionary that Corrfunc produces
+	otherwise just return a numpy array of the counts
+	:param pimax: float, pimax in Mpc/h
+	:param mubins: Setting mubins to anything but None will enable a redshift space measurement
+	:return:
+	A dictionary of (optionally weighted) counts if fulldict==True, otherwise a numpy array of counts
+	"""
 	ras, decs, chis = coords
 	# if weights not given, don't use weights
 	if weights is None:
@@ -87,8 +112,22 @@ def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., m
 
 # count cross-pairs between samples
 def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulldict=True, pimax=40., mubins=None):
-	# unpack coordinate tuple
-	# third entry should be None if you only want angular counts
+	"""
+	Measure cross-correlation counts of a two samples
+
+	:param scales: array, bin edges in degrees for angular, or Mpc/h for spatial
+	:param coords1: 3 tuple of RA, DEC, Optional comoving distance
+	:param coords2: 3 tuple of RA, DEC, Optional comoving distance
+	:param weights1: array
+	:param weights2: array
+	:param nthreads: int
+	:param fulldict: bool, if True, return the full dictionary that Corrfunc produces
+	otherwise just return a numpy array of the counts
+	:param pimax: float, pimax in Mpc/h
+	:param mubins: Setting mubins to anything but None will enable a redshift space measurement
+	:return:
+	A dictionary of (optionally weighted) counts if fulldict==True, otherwise a numpy array of counts
+	"""
 	ras1, decs1, chis1 = coords1
 	ras2, decs2, chis2 = coords2
 
@@ -101,9 +140,10 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 	# if distances given, measure counts in rp and pi bins
 	if chis1 is not None:
 		if mubins is None:
-			dr = DDrppi_mocks(0, 2, nthreads, pimax, scales, ras1, decs1, chis1, weights1=weights1,
-								RA2=ras2, DEC2=decs2, CZ2=chis2, weights2=weights2, is_comoving_dist=True,
-								weight_type=weight_type)
+			dr = DDrppi_mocks(autocorr=0, cosmology=2, nthreads=nthreads, pimax=pimax, binfile=scales,
+							RA1=ras1, DEC1=decs1, CZ1=chis1, weights1=weights1,
+							RA2=ras2, DEC2=decs2, CZ2=chis2, weights2=weights2, is_comoving_dist=True,
+							weight_type=weight_type)
 		else:
 			dr = DDsmu_mocks(autocorr=0, cosmology=2, nthreads=nthreads, mu_max=1., nmu_bins=mubins,
 							binfile=scales, RA1=ras1, DEC1=decs1, CZ1=chis1, weights1=weights1,
@@ -111,7 +151,8 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 							weight_type=weight_type)
 	# if no distances given, only get angular counts
 	else:
-		dr = DDtheta_mocks(0, nthreads, scales, ras1, decs1, RA2=ras2, DEC2=decs2, weights1=weights1,
+		dr = DDtheta_mocks(autocorr=0, nthreads=nthreads, binfile=scales, RA1=ras1, DEC1=decs1,
+							RA2=ras2, DEC2=decs2, weights1=weights1,
 							weights2=weights2, weight_type=weight_type)
 	# return the full dictionary from Corrfunc or simply the weighted number of counts
 	if fulldict:
@@ -154,9 +195,10 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 	# if doing autocorrelation
 	if coords2 is None:
 		n_data2, n_rands2 = n_data1, n_rands1
-		d1d2counts = auto_counts(scales, coords1, weights1, nthreads=nthreads, fulldict=False,
+		d1d2counts = auto_counts(scales=scales, coords=coords1, weights=weights1, nthreads=nthreads, fulldict=False,
 								pimax=pimax, mubins=mubins)
-		d1r2counts = cross_counts(scales, coords1, randcoords1, weights1, randweights1, nthreads=nthreads,
+		d1r2counts = cross_counts(scales=scales, coords1=coords1, coords2=randcoords1,
+								weights1=weights1, weights2=randweights1, nthreads=nthreads,
 								fulldict=False, pimax=pimax, mubins=mubins)
 		# data-random cross counts are symmetric
 		d2r1counts = d1r2counts
@@ -178,12 +220,19 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 			weights2 = weights2[idxs2_in_patch]
 			n_data2 = parse_weights(len(weights2), weights2)
 
-		# do cross correlations
-		d1d2counts = cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=nthreads,
-								fulldict=False, pimax=pimax, mubins=mubins)
-		# only required to have one random catalog
-		d2r1counts = cross_counts(scales, coords2, randcoords1, weights2, randweights1, nthreads=nthreads,
-								fulldict=False, pimax=pimax, mubins=mubins)
+		# Make sure that there is at least source from catalog 2 in this patch, otherwise counting fails
+		if len(coords2[0]) > 0:
+			# do cross correlations
+			d1d2counts = cross_counts(scales=scales, coords1=coords1, coords2=coords2,
+									weights1=weights1, weights2=weights2, nthreads=nthreads,
+									fulldict=False, pimax=pimax, mubins=mubins)
+			# only required to have one random catalog
+			d2r1counts = cross_counts(scales=scales, coords1=coords2, coords2=randcoords1,
+									weights1=weights2, weights2=randweights1, nthreads=nthreads,
+									fulldict=False, pimax=pimax, mubins=mubins)
+		else:
+			d1d2counts, d2r1counts = np.zeros(int(pimax * (len(scales) - 1))), np.zeros(int(pimax * (len(scales) - 1)))
+
 		d1r2counts, r1r2counts = np.zeros_like(d1d2counts), np.zeros_like(d1d2counts)
 		# if using LS estimator
 		if estimator == 'LS':
@@ -438,6 +487,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 	# angular correlation function if no redshifts given
 	if coords1[2] is None:
+		outdict['theta_bins'] = scales
 		outdict['theta'] = effective_scales
 		outdict['w_theta'] = cf
 		# Poisson error e.g. Dipompeo et al. 2017
@@ -448,6 +498,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 		# if getting projected correlation function wp(rp), and full 2D xi(rp, pi)
 		if mubins is None:
+			outdict['rp_bins'] = scales
 			# find centers of rp bins
 			outdict['rp'] = effective_scales
 			# integrate xi(rp, pi) over pi to get wp(rp)
@@ -501,12 +552,14 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 		if coords1[2] is None:
 			outdict['w_err'] = w_realization_variance
 			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
+			outdict['plot'] = plots.w_theta_plot(outdict)
 		else:
 			xi_realization_variance = np.std(xi_realizations, axis=0)
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
 				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+				outdict['plot'] = plots.wp_rp_plot(outdict)
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
 
@@ -542,6 +595,8 @@ def crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None, nthreads=N
 	randcoord2 = None
 	if randcat2 is not None:
 		randcoord2, randweight2 = utils.process_catalog(randcat2)
+	else:
+		randcoord2, randweight2 = None, None
 
 	cf = crosscorr_from_coords(scales=scales, coords1=coord1, coords2=coord2, randcoords1=randcoord1,
 								randcoords2=randcoord2, weights1=weight1,
