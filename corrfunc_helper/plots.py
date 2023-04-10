@@ -226,7 +226,13 @@ def wp_rp_plot(cf):
 
 	ax.set_xscale('log')
 	ax.set_yscale('log')
-	ax.set_xlabel('$r_p [\mathrm{Mpc}/h]$', fontsize=20)
-	ax.set_ylabel('$w_p$', fontsize=20)
+	ax.set_xlabel('$r_p \ [\mathrm{Mpc}/h]$', fontsize=20)
+	ax.set_ylabel('$w_p(r_p)$', fontsize=20)
 	plt.close()
 	return fig
+
+def cf_plot(cf):
+	if 'theta' in cf:
+		return w_theta_plot(cf)
+	else:
+		return wp_rp_plot(cf)

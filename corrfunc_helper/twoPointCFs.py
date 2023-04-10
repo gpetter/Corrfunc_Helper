@@ -313,7 +313,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 		outdict['w_theta'] = cf
 		# Poisson error e.g. Dipompeo et al. 2017
 		outdict['w_err_poisson'] = np.sqrt(2 * np.square(1 + cf) / DD_counts['npairs'])
-		#outdict['plot'] = plots.w_theta_plot(outdict)
+
 
 	# spatial correlation function if redshifts given
 	else:
@@ -370,17 +370,18 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 		if coords[2] is None:
 			outdict['w_err'] = w_realization_variance
 			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
-			outdict['plot'] = plots.w_theta_plot(outdict)
+
 		else:
 			xi_realization_variance = np.std(xi_realizations, axis=0)
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
 				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
-				#outdict['plot'] = plots.wp_rp_plot(outdict)
+
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
 
+	outdict['plot'] = plots.cf_plot(outdict)
 	return outdict
 
 
@@ -419,6 +420,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 		R1R2_counts = cross_counts(scales, randcoords1, randcoords2, weights1=randweights1, weights2=randweights2,
 								nthreads=nthreads, pimax=pimax, mubins=mubins)
 	else:
+		n_rands2, randweights2 = None, None
 		D1R2_counts, R1R2_counts = None, None
 
 
@@ -492,17 +494,16 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 		if coords1[2] is None:
 			outdict['w_err'] = w_realization_variance
 			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
-			outdict['plot'] = plots.w_theta_plot(outdict)
 		else:
 			xi_realization_variance = np.std(xi_realizations, axis=0)
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
 				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
-				outdict['plot'] = plots.wp_rp_plot(outdict)
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
 
+	outdict['plot'] = plots.cf_plot(outdict)
 	return outdict
 
 
