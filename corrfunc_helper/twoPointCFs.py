@@ -1,6 +1,7 @@
 from Corrfunc.mocks.DDtheta_mocks import DDtheta_mocks
 from Corrfunc.mocks.DDrppi_mocks import DDrppi_mocks
 from Corrfunc.mocks.DDsmu_mocks import DDsmu_mocks
+from Corrfunc import utils as cfutils
 import os
 from . import estimators
 import numpy as np
@@ -12,56 +13,6 @@ from functools import partial
 
 # ordering of coordinate object
 coord_dict = {'RA': 0, 'DEC': 1, 'CHI': 2}
-
-
-def parse_coords(coords):
-	"""
-	coord expected to be a 3-tuple. If only doing an angular measurement, append None for the distance column
-	"""
-	if coords is not None:
-		if len(coords) == 2:
-			coords = coords[0], coords[1], None
-	return coords
-
-
-def parse_weights(numcoords, weights):
-	"""
-	Normalizing a correlation function requires number of data and random points
-	If data/randoms are weighted, want a sum of weights rather than a count of coordinates
-	:return: int, number of points
-	"""
-	if weights is not None:
-		n = np.sum(weights)
-	else:
-		n = numcoords
-	return n
-
-def index_tuple(mytuple, idxs):
-	mylist = list(mytuple)
-	for j in range(len(mylist)):
-		if mylist[j] is not None:
-			mylist[j] = np.array(mylist[j])
-			mylist[j] = mylist[j][idxs]
-	return tuple(mylist)
-
-
-
-def get_nthreads():
-	"""
-	count number of available threads for Corrfunc to take advantage of
-	:return:
-	"""
-	return os.cpu_count()
-
-
-# calculate either logarithmic or linear centers of scale bins
-def bin_centers(binedges):
-	# check if linear
-	if (binedges[2] - binedges[1]) == (binedges[1] - binedges[0]):
-		return (binedges[1:] + binedges[:-1]) / 2
-	# otherwise do geometric mean
-	else:
-		return np.sqrt(binedges[1:] * binedges[:-1])
 
 
 # count autocorrelation pairs
@@ -178,8 +129,8 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 	# get only sources/randoms inside patch
 	idxs1_in_patch = np.where(patchmap[hp.ang2pix(nside, ras1, decs1, lonlat=True)] == patchval)
 	randidxs1_in_patch = np.where(patchmap[hp.ang2pix(nside, randras1, randdecs1, lonlat=True)] == patchval)
-	coords1 = index_tuple(coords1, idxs1_in_patch)
-	randcoords1 = index_tuple(randcoords1, randidxs1_in_patch)
+	coords1 = utils.index_tuple(coords1, idxs1_in_patch)
+	randcoords1 = utils.index_tuple(randcoords1, randidxs1_in_patch)
 
 	# if no weights given, use number of points
 	n_data1, n_rands1 = len(coords1[0]), len(randcoords1[0])
@@ -187,10 +138,10 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 	# otherwise sum up weights
 	if weights1 is not None:
 		weights1 = weights1[idxs1_in_patch]
-		n_data1 = parse_weights(len(weights1), weights1)
+		n_data1, weights1 = utils.parse_weights(len(weights1), weights1)
 	if randweights1 is not None:
 		randweights1 = randweights1[randidxs1_in_patch]
-		n_rands1 = parse_weights(len(randweights1), randweights1)
+		n_rands1, randweights1 = utils.parse_weights(len(randweights1), randweights1)
 
 	# if doing autocorrelation
 	if coords2 is None:
@@ -214,11 +165,11 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 		ras2, decs2, chis2 = coords2
 		# get only sources/randoms inside patch
 		idxs2_in_patch = np.where(patchmap[hp.ang2pix(nside, ras2, decs2, lonlat=True)] == patchval)
-		coords2 = index_tuple(coords2, idxs2_in_patch)
+		coords2 = utils.index_tuple(coords2, idxs2_in_patch)
 		n_data2, n_rands2 = len(coords2[0]), 0
 		if weights2 is not None:
 			weights2 = weights2[idxs2_in_patch]
-			n_data2 = parse_weights(len(weights2), weights2)
+			n_data2, weights2 = utils.parse_weights(len(weights2), weights2)
 
 		# Make sure that there is at least source from catalog 2 in this patch, otherwise counting fails
 		if len(coords2[0]) > 0:
@@ -239,11 +190,11 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 			# then second random catalog is required
 			randras2, randdecs2, randchis2 = randcoords2
 			randidxs2_in_patch = np.where(patchmap[hp.ang2pix(nside, randras2, randdecs2, lonlat=True)] == patchval)
-			randcoords2 = index_tuple(randcoords2, randidxs2_in_patch)
+			randcoords2 = utils.index_tuple(randcoords2, randidxs2_in_patch)
 			n_rands2 = len(randcoords2[0])
 			if randweights2 is not None:
 				randweights2 = randweights2[randidxs2_in_patch]
-				n_rands2 = parse_weights(len(randweights2), randweights2)
+				n_rands2, randweights2 = utils.parse_weights(len(randweights2), randweights2)
 
 			d1r2counts = cross_counts(scales, coords1, randcoords2, weights1, randweights2, nthreads=nthreads,
 								fulldict=False, pimax=pimax, mubins=mubins)
@@ -274,7 +225,7 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 
 	# map cores to different patches, count pairs within
 	counts = list(map(part_func, unique_patchvals))
-	counts = np.array(counts)
+	counts = np.array(counts, dtype=object)
 
 	# separate out DD, DR, RR counts from returned array
 	d1d2_counts, d1r2_counts, d2r1_counts, r1r2_counts = counts[:, 0], counts[:, 1], counts[:, 2], counts[:, 3]
@@ -326,15 +277,11 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
 						nbootstrap=0, oversample=1, wedges=None):
 	if nthreads is None:
-		nthreads = get_nthreads()
-	coords, randcoords = parse_coords(coords), parse_coords(randcoords)
+		nthreads = utils.get_nthreads()
+	coords, randcoords = utils.parse_coords(coords), utils.parse_coords(randcoords)
 
-	# number of objects = sum of weights
-	if (weights is not None) and (randweights is not None):
-		n_data, n_rands = np.sum(weights), np.sum(randweights)
-	# if no weights given, weights are 1
-	else:
-		n_data, n_rands = len(coords[0]), len(randcoords[0])
+	n_data, weights = utils.parse_weights(len(coords[0]), weights)
+	n_rands, randweights = utils.parse_weights(len(randcoords[0]), randweights)
 
 	# autocorrelation of catalog
 	DD_counts = auto_counts(scales, coords, weights=weights, nthreads=nthreads, pimax=pimax, mubins=mubins)
@@ -357,7 +304,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 									DR_counts, RR_counts, estimator=estimator)
 
 	# find centers of bins in log or linear space
-	effective_scales = bin_centers(scales)
+	effective_scales = utils.bin_centers(scales)
 
 	# angular correlation function if no redshifts given
 	if coords[2] is None:
@@ -366,7 +313,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 		outdict['w_theta'] = cf
 		# Poisson error e.g. Dipompeo et al. 2017
 		outdict['w_err_poisson'] = np.sqrt(2 * np.square(1 + cf) / DD_counts['npairs'])
-		outdict['plot'] = plots.w_theta_plot(outdict)
+		#outdict['plot'] = plots.w_theta_plot(outdict)
 
 	# spatial correlation function if redshifts given
 	else:
@@ -393,11 +340,9 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			# add 2D CF and Poisson error to output
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
-			outdict['plot'] = plots.wp_rp_plot(outdict)
-			try:
+			#outdict['plot'] = plots.wp_rp_plot(outdict)
+			if ((len(scales) - 1) == int(pimax / dpi)):
 				outdict['2dplot'] = plots.plot_2d_corr_func(cf)
-			except:
-				print()
 
 
 		# otherwise get redshift space clustering
@@ -405,10 +350,9 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			outdict['s'] = effective_scales
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
-			try:
-				outdict['2dplot'] = plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins)
-			except:
-				print()
+			#if len(scales) - 1 == int(pimax / dpi):
+			#	outdict['2dplot'] = plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins)
+
 
 
 	# perform bootstrap resampling of patches for uncertainty
@@ -433,7 +377,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
 				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
-				outdict['plot'] = plots.wp_rp_plot(outdict)
+				#outdict['plot'] = plots.wp_rp_plot(outdict)
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
 
@@ -447,13 +391,15 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
 						nbootstrap=0, oversample=1, wedges=None):
 	if nthreads is None:
-		nthreads = get_nthreads()
+		nthreads = utils.get_nthreads()
 
-	coords1, coords2 = parse_coords(coords1), parse_coords(coords2)
-	randcoords1, randcoords2 = parse_coords(randcoords1), parse_coords(randcoords2)
+	coords1, coords2 = utils.parse_coords(coords1), utils.parse_coords(coords2)
+	randcoords1, randcoords2 = utils.parse_coords(randcoords1), utils.parse_coords(randcoords2)
 
-	n_data1, n_rands1 = parse_weights(len(coords1[0]), weights1), parse_weights(len(randcoords1[0]), randweights1)
-	n_data2, n_rands2 = parse_weights(len(coords2[0]), weights2), None
+	n_data1, weights1  = utils.parse_weights(len(coords1[0]), weights1)
+	n_rands1, randweights1 = utils.parse_weights(len(randcoords1[0]), randweights1)
+	n_data2, weights2 = utils.parse_weights(len(coords2[0]), weights2)
+
 
 	# cross correlation of data points
 	D1D2_counts = cross_counts(scales, coords1, coords2,
@@ -465,7 +411,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 							nthreads=nthreads, pimax=pimax, mubins=mubins)
 
 	if estimator == 'LS':
-		n_rands2 = parse_weights(len(randcoords2[0]), randweights2)
+		n_rands2, randweights2 = utils.parse_weights(len(randcoords2[0]), randweights2)
 		# cross correlation between second data and first random catalogs
 		D1R2_counts = cross_counts(scales, coords1, randcoords2, weights1=weights1, weights2=randweights2,
 								nthreads=nthreads, pimax=pimax, mubins=mubins)
@@ -483,7 +429,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 									D2R1_counts, R1R2_counts, estimator=estimator)
 
 	# find centers of bins in log or linear space
-	effective_scales = bin_centers(scales)
+	effective_scales = utils.bin_centers(scales)
 
 	# angular correlation function if no redshifts given
 	if coords1[2] is None:
@@ -495,7 +441,6 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 	# spatial correlation function if redshifts given
 	else:
-
 		# if getting projected correlation function wp(rp), and full 2D xi(rp, pi)
 		if mubins is None:
 			outdict['rp_bins'] = scales
@@ -521,20 +466,15 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 			# add 2D CF and Poisson error to output
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
-			try:
+			if ((len(scales) - 1) == int(pimax / dpi)):
 				outdict['2dplot'] = plots.plot_2d_corr_func(cf)
-			except:
-				print()
 
 		# otherwise get redshift space clustering
 		else:
 			outdict['s'] = effective_scales
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
-			try:
-				outdict['2dplot'] = plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins)
-			except:
-				print()
+			#outdict['2dplot'] = plots.xi_mu_s_plot(cf, nsbins=len(scales)-1, nmubins=mubins)
 
 
 	# perform bootstrap resampling of patches for uncertainty
@@ -586,6 +526,7 @@ def autocorr_cat(scales, datcat, randcat, nthreads=None, estimator='LS', pimax=4
 								mubins=mubins, nbootstrap=nbootstrap, oversample=oversample,
 								wedges=wedges)
 	return cf
+
 
 def crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None, nthreads=None, estimator='LS', pimax=40.,
 				  dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None):
