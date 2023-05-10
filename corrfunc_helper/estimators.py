@@ -36,8 +36,8 @@ def convert_counts_to_cf(ND1, ND2, NR1, NR2,
 
 		nonzero = pair_counts['R1R2'] > 0
 
-		fN1 = np.float(NR1) / np.float(ND1)
-		fN2 = np.float(NR2) / np.float(ND2)
+		fN1 = float(NR1) / float(ND1)
+		fN2 = float(NR2) / float(ND2)
 		cf = np.zeros(nbins)
 		cf[:] = np.nan
 		cf[nonzero] = (fN1 * fN2 * pair_counts['D1D2'][nonzero] -
@@ -72,7 +72,7 @@ def convert_counts_to_cf(ND1, ND2, NR1, NR2,
 			raise ValueError(msg)
 
 		nonzero = pair_counts['D2R1'] > 0
-		fN1 = np.float(NR1) / np.float(ND1)
+		fN1 = float(NR1) / float(ND1)
 
 		cf = np.zeros(nbins)
 		cf[:] = np.nan
