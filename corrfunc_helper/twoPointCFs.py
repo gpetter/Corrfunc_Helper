@@ -248,8 +248,8 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 		# sum pairs in those patches
 		bootndata1, bootnrands1 = ndata1[boot_patches], nrands1[boot_patches]
 		bootndata2, bootnrands2 = ndata2[boot_patches], nrands2[boot_patches]
-		totdata1, totrands1 = np.sum(bootndata1) / np.float(oversample), np.sum(bootnrands1) / np.float(oversample)
-		totdata2, totrands2 = np.sum(bootndata2) / np.float(oversample), np.sum(bootnrands2) / np.float(oversample)
+		totdata1, totrands1 = np.sum(bootndata1) / float(oversample), np.sum(bootnrands1) / float(oversample)
+		totdata2, totrands2 = np.sum(bootndata2) / float(oversample), np.sum(bootnrands2) / float(oversample)
 		boot_d1d2counts, boot_d1r2counts, boot_d2r1counts, bootr1r2counts = d1d2_counts[boot_patches], \
 																			d1r2_counts[boot_patches], \
 																			d2r1_counts[boot_patches], \
