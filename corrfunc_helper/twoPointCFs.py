@@ -16,7 +16,7 @@ coord_dict = {'RA': 0, 'DEC': 1, 'CHI': 2}
 
 
 # count autocorrelation pairs
-def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., mubins=None):
+def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., dpi=1., mubins=None):
 	"""
 	Measure autocorrelation counts of a sample
 
@@ -51,6 +51,9 @@ def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., m
 	# if no distances given, only get angular counts
 	else:
 		dd = DDtheta_mocks(1, nthreads, scales, ras, decs, weights1=weights, weight_type=weight_type)
+
+	if dpi > 1.:
+		dd = utils.bin_in_pi(dd, pimax=pimax, dpi=dpi)
 	# return the full dictionary from Corrfunc or simply the weighted number of counts
 	if fulldict:
 		return dd
@@ -62,7 +65,7 @@ def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., m
 
 
 # count cross-pairs between samples
-def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulldict=True, pimax=40., mubins=None):
+def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulldict=True, pimax=40., dpi=1., mubins=None):
 	"""
 	Measure cross-correlation counts of a two samples
 
@@ -105,6 +108,9 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 		dr = DDtheta_mocks(autocorr=0, nthreads=nthreads, binfile=scales, RA1=ras1, DEC1=decs1,
 							RA2=ras2, DEC2=decs2, weights1=weights1,
 							weights2=weights2, weight_type=weight_type)
+
+	if dpi > 1.:
+		dr = utils.bin_in_pi(dr, pimax=pimax, dpi=dpi)
 	# return the full dictionary from Corrfunc or simply the weighted number of counts
 	if fulldict:
 		return dr
@@ -119,9 +125,8 @@ def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulld
 def counts_in_patch(patchval, patchmap, scales, nthreads,
 					coords1, randcoords1, weights1, randweights1,
 					coords2, randcoords2, weights2, randweights2,
-					mubins, estimator, pimax):
+					mubins, estimator, pimax, dpi):
 	nside = hp.npix2nside(len(patchmap))
-
 	# unpack coordinates
 	ras1, decs1, chis1 = coords1
 	randras1, randdecs1, randchis1 = randcoords1
@@ -147,17 +152,17 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 	if coords2 is None:
 		n_data2, n_rands2 = n_data1, n_rands1
 		d1d2counts = auto_counts(scales=scales, coords=coords1, weights=weights1, nthreads=nthreads, fulldict=False,
-								pimax=pimax, mubins=mubins)
+								pimax=pimax, dpi=dpi, mubins=mubins)
 		d1r2counts = cross_counts(scales=scales, coords1=coords1, coords2=randcoords1,
 								weights1=weights1, weights2=randweights1, nthreads=nthreads,
-								fulldict=False, pimax=pimax, mubins=mubins)
+								fulldict=False, pimax=pimax, dpi=dpi, mubins=mubins)
 		# data-random cross counts are symmetric
 		d2r1counts = d1r2counts
 
 		# only count random-random pairs if using Landy-Szalay estimator
 		if estimator == 'LS':
 			r1r2counts = auto_counts(scales, randcoords1, randweights1, nthreads=nthreads, fulldict=False,
-									pimax=pimax, mubins=mubins)
+									pimax=pimax, dpi=dpi, mubins=mubins)
 		else:
 			r1r2counts = np.zeros_like(d1d2counts)
 	# otherwise a cross correlation
@@ -176,11 +181,11 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 			# do cross correlations
 			d1d2counts = cross_counts(scales=scales, coords1=coords1, coords2=coords2,
 									weights1=weights1, weights2=weights2, nthreads=nthreads,
-									fulldict=False, pimax=pimax, mubins=mubins)
+									fulldict=False, pimax=pimax, dpi=dpi, mubins=mubins)
 			# only required to have one random catalog
 			d2r1counts = cross_counts(scales=scales, coords1=coords2, coords2=randcoords1,
 									weights1=weights2, weights2=randweights1, nthreads=nthreads,
-									fulldict=False, pimax=pimax, mubins=mubins)
+									fulldict=False, pimax=pimax, dpi=dpi, mubins=mubins)
 		else:
 			d1d2counts, d2r1counts = np.zeros(int(pimax * (len(scales) - 1))), np.zeros(int(pimax * (len(scales) - 1)))
 
@@ -197,9 +202,9 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 				n_rands2, randweights2 = utils.parse_weights(len(randweights2), randweights2)
 
 			d1r2counts = cross_counts(scales, coords1, randcoords2, weights1, randweights2, nthreads=nthreads,
-								fulldict=False, pimax=pimax, mubins=mubins)
+								fulldict=False, pimax=pimax, dpi=dpi, mubins=mubins)
 			r1r2counts = cross_counts(scales, randcoords1, randcoords2, randweights1, randweights2, nthreads=nthreads,
-								fulldict=False, pimax=pimax, mubins=mubins)
+								fulldict=False, pimax=pimax, dpi=dpi, mubins=mubins)
 
 	return [d1d2counts, d1r2counts, d2r1counts, r1r2counts, n_data1, n_rands1, n_data2, n_rands2]
 
@@ -207,7 +212,7 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 #
 def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, weights1, randweights1,
 						coords2=None, randcoords2=None, weights2=None, randweights2=None,
-						oversample=1, pimax=40., mubins=None, npatches=30, estimator='LS', wedges=None):
+						oversample=1, pimax=40., dpi=1., mubins=None, npatches=30, estimator='LS', wedges=None):
 
 	# split footprint into N patches
 	patchmap = jackknife.bin_on_sky(randcoords1, npatches=npatches)
@@ -221,7 +226,7 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 						weights1=weights1, randweights1=randweights1,
 						coords2=coords2, randcoords2=randcoords2,
 						weights2=weights2, randweights2=randweights2,
-						mubins=mubins, estimator=estimator, pimax=pimax)
+						mubins=mubins, estimator=estimator, pimax=pimax, dpi=dpi)
 
 	# map cores to different patches, count pairs within
 	counts = list(map(part_func, unique_patchvals))
@@ -263,7 +268,7 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 		else:
 			xi_realizations.append(cf)
 			if mubins is None:
-				w_realizations.append(estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1, pimax=pimax))
+				w_realizations.append(estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1, pimax=pimax, dpi=dpi))
 			else:
 				xi_s = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales) - 1, nmubins=mubins, wedges=wedges)
 				#mono, quad = xi_s[0], xi_s[1]
@@ -284,15 +289,16 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 	n_rands, randweights = utils.parse_weights(len(randcoords[0]), randweights)
 
 	# autocorrelation of catalog
-	DD_counts = auto_counts(scales, coords, weights=weights, nthreads=nthreads, pimax=pimax, mubins=mubins)
+	DD_counts = auto_counts(scales, coords, weights=weights, nthreads=nthreads, pimax=pimax, dpi=dpi, mubins=mubins)
 
 	# cross correlation between data and random catalog
 	DR_counts = cross_counts(scales, coords, randcoords, weights1=weights, weights2=randweights,
-								nthreads=nthreads, pimax=pimax, mubins=mubins)
+								nthreads=nthreads, pimax=pimax, dpi=dpi, mubins=mubins)
 
 	# autocorrelation of random points
 	if estimator == 'LS':
-		RR_counts = auto_counts(scales, randcoords, weights=randweights, nthreads=nthreads, pimax=pimax, mubins=mubins)
+		RR_counts = auto_counts(scales, randcoords, weights=randweights, nthreads=nthreads,
+								pimax=pimax, dpi=dpi, mubins=mubins)
 	# If using DD/DR-1, don't need to calculate expensive RR pairs
 	else:
 		RR_counts = None
@@ -323,8 +329,9 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			outdict['rp_bins'] = scales
 			outdict['rp'] = effective_scales
 			# integrate xi(rp, pi) over pi to get wp(rp)
-			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
-											pimax=pimax, dpi=dpi)
+			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1, pimax=pimax, dpi=dpi)
+			outdict['pimax'] = pimax
+			outdict['dpi'] = dpi
 			# Poisson errors on 2D CF
 			# if N_pairs > N_data points (at large scales), use minimum of the two to get Poisson errors
 			# e.g. Shen et al 2007
@@ -362,17 +369,17 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 											coords1=coords, randcoords1=randcoords, weights1=weights,
 											randweights1=randweights, coords2=None, randcoords2=None,
 											weights2=None, randweights2=None,
-											oversample=oversample, pimax=pimax,
+											oversample=oversample, pimax=pimax, dpi=dpi,
 											estimator=estimator, mubins=mubins, wedges=wedges)
 		# error estimate is variance of realizations
-		w_realization_variance = np.std(w_realizations, axis=0)
+		w_realization_variance = np.nanstd(w_realizations, axis=0)
 
 		if coords[2] is None:
 			outdict['w_err'] = w_realization_variance
 			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
 
 		else:
-			xi_realization_variance = np.std(xi_realizations, axis=0)
+			xi_realization_variance = np.nanstd(xi_realizations, axis=0)
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
@@ -405,20 +412,20 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 	# cross correlation of data points
 	D1D2_counts = cross_counts(scales, coords1, coords2,
 							weights1=weights1, weights2=weights2,
-							nthreads=nthreads, pimax=pimax, mubins=mubins)
+							nthreads=nthreads, pimax=pimax, dpi=dpi, mubins=mubins)
 
 	# cross correlation between first data and second random catalogs
 	D2R1_counts = cross_counts(scales, coords2, randcoords1, weights1=weights2, weights2=randweights1,
-							nthreads=nthreads, pimax=pimax, mubins=mubins)
+							nthreads=nthreads, pimax=pimax, dpi=dpi, mubins=mubins)
 
 	if estimator == 'LS':
 		n_rands2, randweights2 = utils.parse_weights(len(randcoords2[0]), randweights2)
 		# cross correlation between second data and first random catalogs
 		D1R2_counts = cross_counts(scales, coords1, randcoords2, weights1=weights1, weights2=randweights2,
-								nthreads=nthreads, pimax=pimax, mubins=mubins)
+								nthreads=nthreads, pimax=pimax, dpi=dpi, mubins=mubins)
 
 		R1R2_counts = cross_counts(scales, randcoords1, randcoords2, weights1=randweights1, weights2=randweights2,
-								nthreads=nthreads, pimax=pimax, mubins=mubins)
+								nthreads=nthreads, pimax=pimax, dpi=dpi, mubins=mubins)
 	else:
 		n_rands2, randweights2 = None, None
 		D1R2_counts, R1R2_counts = None, None
@@ -451,6 +458,8 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 			# integrate xi(rp, pi) over pi to get wp(rp)
 			outdict['wp'] = estimators.convert_cf_to_wp(cf, nrpbins=len(scales)-1,
 											pimax=pimax, dpi=dpi)
+			outdict['pimax'] = pimax
+			outdict['dpi'] = dpi
 			# Poisson errors on 2D CF
 			# if N_pairs > N_data points (at large scales), use minimum of the two to get Poisson errors
 			# e.g. Shen et al 2007
@@ -486,16 +495,16 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 												coords1=coords1, randcoords1=randcoords1, weights1=weights1,
 												randweights1=randweights1, coords2=coords2, randcoords2=randcoords2,
 												weights2=weights2, randweights2=randweights2,
-												oversample=oversample, pimax=pimax,
+												oversample=oversample, pimax=pimax, dpi=dpi,
 												estimator=estimator, mubins=mubins, wedges=wedges)
 		# error estimate is variance of realizations
-		w_realization_variance = np.std(w_realizations, axis=0)
+		w_realization_variance = np.nanstd(w_realizations, axis=0)
 
 		if coords1[2] is None:
 			outdict['w_err'] = w_realization_variance
 			outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['w_theta']))
 		else:
-			xi_realization_variance = np.std(xi_realizations, axis=0)
+			xi_realization_variance = np.nanstd(xi_realizations, axis=0)
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance

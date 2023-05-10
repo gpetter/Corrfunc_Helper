@@ -9,9 +9,9 @@ def parse_coords(coords):
 	coord expected to be a 3-tuple. If only doing an angular measurement, append None for the distance column
 	also convert arrays to native endianness
 	"""
-	lons, lats = coords[0], coords[1]
-	lons, lats = cfutils.convert_to_native_endian(lons), cfutils.convert_to_native_endian(lats)
 	if coords is not None:
+		lons, lats = coords[0], coords[1]
+		lons, lats = cfutils.convert_to_native_endian(lons), cfutils.convert_to_native_endian(lats)
 		if len(coords) == 2:
 			coords = lons, lats, None
 		else:
@@ -92,3 +92,52 @@ def process_catalog(cat):
 	coord = (ra, dec, chi)
 	return coord, weight
 
+def bin_in_pi(cf, pimax=40, dpi=2.):
+	"""
+	corrfunc by default only allows pi bin sizes of 1 Mpc/h
+	this function sums up pair counts with a new dpi value (should be int > 1)
+
+	:param cf:
+	:param pimax:
+	:param dpi:
+	:return:
+	"""
+	pimax = int(pimax)
+	npi = int(pimax / dpi)
+	newarr = []
+	nrbins = int(len(cf) / pimax)
+
+	# for each rp bin
+	for i in range(nrbins):
+		# counts within rp bin
+		cf_r = cf[int(pimax) * i:(int(pimax) * (i + 1))]
+
+		rmin = cf_r[0][0]
+		rmax = cf_r[0][1]
+
+		# collect pair counts and weights
+		pairs, weights = [], []
+		for j in range(pimax):
+			pairs.append(cf_r[j][4]), weights.append(cf_r[j][5])
+
+		# sum up number of pairs, take average of weights within new pi bin
+		newpairs, newweights = [], []
+		for j in range(npi):
+			pairs_in_newbin = np.array(pairs[int(dpi) * j:int(dpi) * (j + 1)])
+			weights_in_newbin = np.array(weights[int(dpi) * j:int(dpi) * (j + 1)])
+			# only want average of weights where pairs detected
+			nonzero_idxs = (pairs_in_newbin > 0)
+
+			newpairs.append(np.sum(pairs_in_newbin))
+			if np.any(nonzero_idxs):
+				newweight = np.mean(weights_in_newbin[nonzero_idxs], )
+			else:
+				newweight = 0.
+
+			newweights.append(newweight)
+
+		# package back up into format corrfunc expects
+		for j in range(npi):
+			newtuple = (rmin, rmax, 0., ((j + 1) * dpi), newpairs[j], newweights[j])
+			newarr.append(newtuple)
+	return np.array(newarr, dtype=cf.dtype)
