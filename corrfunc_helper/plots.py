@@ -19,7 +19,7 @@ def gaussKern(size):
 	g = np.exp(-(x ** 2 / float(size) + y ** 2 / float(size)))
 	return g / g.sum()
 
-def smooth(im, n=15):
+def gausssmooth(im, n=15):
 	"""
 	Smooth a 2D array im by convolving with a Gaussian kernel of size n
 
@@ -34,7 +34,8 @@ def smooth(im, n=15):
 	return (improc)
 
 
-def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None)):
+def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None), smooth=8, cmap='jet', ncontour=10):
+	#implement calculating s^2 *xi(rp, pi), s = sqrt(rp^2+pi^2), so no need for log
 
 	nbins = int(np.sqrt(len(cf)))
 	cf2d = np.reshape(np.array(cf), (-1, nbins))
@@ -50,8 +51,8 @@ def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None)):
 	qT = np.hstack((qTL, qTR))  # top half
 	qB = np.hstack((qBL, qBR))  # bottom half
 	qq = np.vstack((qB, qT))  # full array
-	if setnegszero:
-		qqs = smooth(qq, n=8)  # smoothed full array
+	if setnegszero and (smooth > 0):
+		qqs = gausssmooth(qq, n=smooth)  # smoothed full array
 	else:
 		qqs = qq
 
@@ -64,9 +65,9 @@ def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None)):
 		x,y = np.meshgrid(np.arange(-nbins, nbins+1), np.arange(-nbins, nbins+1))
 
 		# Plot array
-		pc = ax.pcolor(x,y,qqs,cmap='jet', vmin=inputrange[0], vmax=inputrange[1])
+		pc = ax.pcolor(x,y,qqs,cmap=cmap, vmin=inputrange[0], vmax=inputrange[1])
 		# Plot contours
-		lev = np.linspace(np.amin(qqs),np.amax(qqs),15)
+		lev = np.linspace(np.amin(qqs),np.amax(qqs),ncontour)
 		ax.contour(np.linspace(-halfwidth, halfwidth, 2*nbins),
 				np.linspace(-halfwidth, halfwidth, 2*nbins),
 				qqs, levels=lev, colors='k',
@@ -97,7 +98,7 @@ def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None)):
 	return fig
 
 
-def plotmultiple_2d_corr_func(cfs, setnegszero=True, inputrange=(None, None)):
+def plotmultiple_2d_corr_func(cfs, setnegszero=True, inputrange=(None, None), smooth=8, cmap='jet', ncontour=10):
 	if len(cfs) > 5:
 		cfs = [cfs]
 	fig, ax = plt.subplots(figsize=(len(cfs) * 8, 8), ncols=len(cfs))
@@ -119,8 +120,8 @@ def plotmultiple_2d_corr_func(cfs, setnegszero=True, inputrange=(None, None)):
 		qT = np.hstack((qTL, qTR))  # top half
 		qB = np.hstack((qBL, qBR))  # bottom half
 		qq = np.vstack((qB, qT))  # full array
-		if setnegszero:
-			qqs = smooth(qq, n=8)  # smoothed full array
+		if setnegszero and (smooth > 0):
+			qqs = gausssmooth(qq, n=smooth)  # smoothed full array
 		else:
 			qqs = qq
 		smoothcf.append(qqs)
@@ -140,9 +141,9 @@ def plotmultiple_2d_corr_func(cfs, setnegszero=True, inputrange=(None, None)):
 			x, y = np.meshgrid(np.arange(-nbins, nbins + 1), np.arange(-nbins, nbins + 1))
 
 			# Plot array
-			pc = thisax.pcolor(x, y, smoothcf[j], cmap='jet', vmin=inputrange[0], vmax=inputrange[1])
+			pc = thisax.pcolor(x, y, smoothcf[j], cmap=cmap, vmin=inputrange[0], vmax=inputrange[1])
 			# Plot contours
-			lev = np.linspace(np.amin(smoothcf[j]), np.amax(qqs), 15)
+			lev = np.linspace(np.amin(smoothcf[j]), np.amax(qqs), ncontour)
 			thisax.contour(np.linspace(-halfwidth, halfwidth, 2 * nbins),
 						   np.linspace(-halfwidth, halfwidth, 2 * nbins),
 						   smoothcf[j], levels=lev, colors='k',
@@ -170,7 +171,7 @@ def xi_mu_s_plot(cf, nsbins, nmubins, inputrange=(None, None)):
 	f = interpolate.interp2d(np.linspace(0, 1, nmubins), np.arange(nsbins), qTR)
 	twodcf = np.fliplr(f(np.linspace(0, 1, nsbins), np.arange(nsbins)))
 	nbins = len(twodcf)
-	qqs = smooth(twodcf, n=8)
+	qqs = gausssmooth(twodcf, n=8)
 	outputrange = (np.amin(qqs), np.amax(qqs))
 	fig, ax = plt.subplots(figsize=(8, 8))
 	x, y = np.meshgrid(np.linspace(1, 0, nbins+1), np.arange(0, nbins+1))
@@ -231,8 +232,28 @@ def wp_rp_plot(cf):
 	plt.close()
 	return fig
 
+def xi_s_plot(cf):
+	fig, ax = plt.subplots(figsize=(8, 6))
+	if len(np.shape(cf['mono'])) > 1:
+		for j in range(len(cf['mono'])):
+			ax.scatter(cf['s'], cf['mono'][j])
+			ax.errorbar(cf['s'], cf['mono'][j], yerr=cf['mono_err'][j], fmt='none')
+	else:
+		ax.scatter(cf['s'], cf['mono'], c='k')
+		ax.errorbar(cf['s'], cf['mono'], yerr=cf['mono_err'], fmt='none', ecolor='k')
+
+	ax.set_xscale('log')
+	ax.set_yscale('log')
+	ax.set_xlabel('$s \ [\mathrm{Mpc}/h]$', fontsize=20)
+	ax.set_ylabel(r'$\xi_{0}(s)$', fontsize=20)
+	plt.close()
+	return fig
+
+
 def cf_plot(cf):
 	if 'theta' in cf:
 		return w_theta_plot(cf)
+	elif 'mono' in cf:
+		return xi_s_plot(cf)
 	else:
 		return wp_rp_plot(cf)
