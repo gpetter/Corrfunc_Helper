@@ -280,7 +280,7 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 # the former measures an angular CF, latter a spatial CF
 def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=None,
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
-						nbootstrap=0, oversample=1, wedges=None):
+						nbootstrap=0, oversample=1, wedges=None, retplots=True):
 	if nthreads is None:
 		nthreads = utils.get_nthreads()
 	coords, randcoords = utils.parse_coords(coords), utils.parse_coords(randcoords)
@@ -347,8 +347,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			# add 2D CF and Poisson error to output
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
-			#outdict['plot'] = plots.wp_rp_plot(outdict)
-			if ((len(scales) - 1) == int(pimax / dpi)):
+			if ((len(scales) - 1) == int(pimax / dpi)) and retplots:
 				outdict['2dplot'] = plots.plot_2d_corr_func(cf)
 
 
@@ -387,8 +386,8 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
-
-	outdict['plot'] = plots.cf_plot(outdict)
+	if retplots:
+		outdict['plot'] = plots.cf_plot(outdict)
 	return outdict
 
 
@@ -397,7 +396,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=None, weights1=None,
 						weights2=None, randweights1=None, randweights2=None,
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
-						nbootstrap=0, oversample=1, wedges=None):
+						nbootstrap=0, oversample=1, wedges=None, retplots=True):
 	if nthreads is None:
 		nthreads = utils.get_nthreads()
 
@@ -477,7 +476,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 			# add 2D CF and Poisson error to output
 			outdict['xi_rp_pi'] = cf
 			outdict['xi_rp_pi_poisson_err'] = xi_rp_poisson_errs
-			if ((len(scales) - 1) == int(pimax / dpi)):
+			if ((len(scales) - 1) == int(pimax / dpi)) and retplots:
 				outdict['2dplot'] = plots.plot_2d_corr_func(cf)
 
 		# otherwise get redshift space clustering
@@ -511,8 +510,8 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
-
-	outdict['plot'] = plots.cf_plot(outdict)
+	if retplots:
+		outdict['plot'] = plots.cf_plot(outdict)
 	return outdict
 
 
