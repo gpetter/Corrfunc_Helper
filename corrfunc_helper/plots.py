@@ -34,8 +34,11 @@ def gausssmooth(im, n=15):
 	return (improc)
 
 
-def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None), smooth=8, cmap='jet', ncontour=10):
+def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None), smooth=8, cmap='jet',
+					  ncontour=10, rps=None, pis=None):
 	#implement calculating s^2 *xi(rp, pi), s = sqrt(rp^2+pi^2), so no need for log
+	if rps is not None:
+		s = np.sqrt(np.add.outer(np.square(rps), np.square(pis)))
 
 	nbins = int(np.sqrt(len(cf)))
 	cf2d = np.reshape(np.array(cf), (-1, nbins))
