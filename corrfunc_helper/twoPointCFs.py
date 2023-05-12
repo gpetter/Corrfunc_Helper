@@ -353,6 +353,7 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 
 		# otherwise get redshift space clustering
 		else:
+			outdict['s_bins'] = scales
 			outdict['s'] = effective_scales
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
@@ -481,6 +482,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 		# otherwise get redshift space clustering
 		else:
+			outdict['s_bins'] = scales
 			outdict['s'] = effective_scales
 			w = estimators.convert_cf_to_xi_s(cf, nsbins=len(scales)-1, nmubins=mubins, wedges=wedges)
 			outdict['mono'], outdict['quad'] = w[0], w[1]
