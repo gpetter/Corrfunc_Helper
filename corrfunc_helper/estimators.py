@@ -123,9 +123,7 @@ def convert_cf_to_wp(xirppi, nrpbins, pimax, dpi=1.0):
 
 # convert 2D pair counts in pi and r_p into projected correlation function wp(r_p)
 def convert_cf_to_xi_s(xi_s_mu, nsbins, nmubins, wedges=None):
-	from halotools.mock_observables import tpcf_multipole
-
-
+	from .utils import tpcf_multipole
 	xi_s_mu = np.reshape(xi_s_mu, (nsbins, nmubins))
 	mubinedges = np.linspace(0., 1., nmubins+1)
 

@@ -1,7 +1,7 @@
 import numpy as np
 from Corrfunc import utils as cfutils
 import os
-
+from scipy.special import legendre
 
 def parse_coords(coords):
 
@@ -141,3 +141,54 @@ def bin_in_pi(cf, pimax=40, dpi=2.):
 			newtuple = (rmin, rmax, 0., ((j + 1) * dpi), newpairs[j], newweights[j])
 			newarr.append(newtuple)
 	return np.array(newarr, dtype=cf.dtype)
+
+
+def tpcf_multipole(s_mu_tcpf_result, mu_bins, order=0):
+    """
+    Taken from halotools
+	Original author Duncan Campbell
+    Calculate the multipoles of the two point correlation function
+    after first computing `~halotools.mock_observables.s_mu_tpcf`.
+
+    Parameters
+    ----------
+    s_mu_tcpf_result : np.ndarray
+        2-D array with the two point correlation function calculated in bins
+        of :math:`s` and :math:`\mu`.  See `~halotools.mock_observables.s_mu_tpcf`.
+
+    mu_bins : array_like
+        array of :math:`\mu = \cos(\theta_{\rm LOS})`
+        bins for which ``s_mu_tcpf_result`` has been calculated.
+        Must be between [0,1].
+
+    order : int, optional
+        order of the multpole returned.
+
+    Returns
+    -------
+    xi_l : np.array
+        multipole of ``s_mu_tcpf_result`` of the indicated order.
+
+    Examples
+    --------
+    For demonstration purposes we create a randomly distributed set of points within a
+    periodic cube of length 250 Mpc/h.
+
+    """
+
+    # process inputs
+    s_mu_tcpf_result = np.atleast_1d(s_mu_tcpf_result)
+    mu_bins = np.atleast_1d(mu_bins)
+    order = int(order)
+
+    # calculate the center of each mu bin
+    mu_bin_centers = (mu_bins[:-1]+mu_bins[1:])/(2.0)
+
+    # get the Legendre polynomial of the desired order.
+    Ln = legendre(order)
+
+    # numerically integrate over mu
+    result = (2.0*order + 1.0)/2.0 * np.sum(s_mu_tcpf_result * np.diff(mu_bins) *\
+        (Ln(mu_bin_centers) + Ln(-1.0*mu_bin_centers)), axis=1)
+
+    return result
