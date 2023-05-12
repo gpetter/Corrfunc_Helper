@@ -517,7 +517,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 def autocorr_cat(scales, datcat, randcat, nthreads=None, estimator='LS', pimax=40.,
 				  dpi=1., mubins=None, nbootstrap=0, oversample=1,
-				  wedges=None):
+				  wedges=None, retplots=True):
 	"""
 	Utility to save a couple lines by automatically extracting necessary info from input catalogs for clustering
 
@@ -533,12 +533,12 @@ def autocorr_cat(scales, datcat, randcat, nthreads=None, estimator='LS', pimax=4
 	cf = autocorr_from_coords(scales, coord, randcoord, weights=weight, randweights=randweight,
 								nthreads=nthreads, estimator=estimator, pimax=pimax, dpi=dpi,
 								mubins=mubins, nbootstrap=nbootstrap, oversample=oversample,
-								wedges=wedges)
+								wedges=wedges, retplots=retplots)
 	return cf
 
 
 def crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None, nthreads=None, estimator='LS', pimax=40.,
-				  dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None):
+				  dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None, retplots=True):
 	coord1, weight1 = utils.process_catalog(datcat1)
 	coord2, weight2 = utils.process_catalog(datcat2)
 	randcoord1, randweight1 = utils.process_catalog(randcat1)
@@ -552,13 +552,13 @@ def crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None, nthreads=N
 								randcoords2=randcoord2, weights1=weight1,
 								weights2=weight2, randweights1=randweight1, randweights2=randweight2,
 								nthreads=nthreads, estimator=estimator, pimax=pimax, dpi=dpi, mubins=mubins,
-								nbootstrap=nbootstrap, oversample=oversample, wedges=wedges)
+								nbootstrap=nbootstrap, oversample=oversample, wedges=wedges, retplots=retplots)
 	return cf
 
 
 def auto_and_crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None,
 							nthreads=None, estimator='LS', pimax=40.,
-							dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None):
+							dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None, retplots=True):
 	"""
 	Do autocorrelation of a reference sample as well as cross correlation of that sample with another
 	Useful when needing to measure bias of reference sample, and the cross bias simultaneously
@@ -568,10 +568,10 @@ def auto_and_crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None,
 	autocf = autocorr_cat(scales, datcat1, randcat1, nthreads=nthreads,
 							estimator=estimator, pimax=pimax,
 							dpi=dpi, mubins=mubins, nbootstrap=nbootstrap,
-							oversample=oversample, wedges=wedges)
+							oversample=oversample, wedges=wedges, retplots=retplots)
 
 	crosscf = crosscorr_cats(scales, datcat1, datcat2, randcat1,
 							randcat2=randcat2, nthreads=nthreads,
 							estimator=estimator, pimax=pimax, dpi=dpi, mubins=mubins,
-							nbootstrap=nbootstrap, oversample=oversample, wedges=wedges)
+							nbootstrap=nbootstrap, oversample=oversample, wedges=wedges, retplots=retplots)
 	return autocf, crosscf
