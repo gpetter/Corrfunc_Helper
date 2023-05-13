@@ -383,7 +383,9 @@ def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=N
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
-				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+				outdict['wp_covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+				outdict['xi_covar'] = jackknife.covariance_matrix(np.array(xi_realizations),
+																  np.array(outdict['xi_rp_pi']))
 
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
@@ -509,7 +511,9 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 			if mubins is None:
 				outdict['wp_err'] = w_realization_variance
 				outdict['xi_rp_pi_err'] = xi_realization_variance
-				outdict['covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+				outdict['wp_covar'] = jackknife.covariance_matrix(np.array(w_realizations), np.array(outdict['wp']))
+				outdict['xi_covar'] = jackknife.covariance_matrix(np.array(xi_realizations),
+																  np.array(outdict['xi_rp_pi']))
 			else:
 				outdict['mono_err'], outdict['quad_err'] = w_realization_variance[0], w_realization_variance[1]
 	if retplots:
