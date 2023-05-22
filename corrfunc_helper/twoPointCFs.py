@@ -581,3 +581,69 @@ def auto_and_crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None,
 							estimator=estimator, pimax=pimax, dpi=dpi, mubins=mubins,
 							nbootstrap=nbootstrap, oversample=oversample, wedges=wedges, retplots=retplots)
 	return autocf, crosscf
+
+
+def cross_spec_phot(rpscales, speccat, photcat, nphotbins, nspecbins,
+					specrand=None, photrand=None, pimax=50, sigthresh=3., nthreads=16):
+	"""
+	Cross correlate a spectroscopic catalog with a photometric catalog containing photometric redshift estimates
+	Implements method proposed in Myers et al. 2009
+	Currently limited to normally distributed Zphot posteriors, but could alter to incorporate complex PDFs
+	:param rpscales:
+	:param speccat:
+	:param photcat:
+	:param nphotbins:
+	:param nspecbins:
+	:param specrand:
+	:param photrand:
+	:param pimax:
+	:param sigthresh:
+	:param nthreads:
+	:return:
+	"""
+	from scipy.stats import norm
+	from colossus.cosmology import cosmology
+	cosmo = cosmology.setCosmology('planck18')
+	zspace = np.linspace(0., 4, 1000)
+	chis = cosmo.comovingDistance(np.zeros_like(zspace), zspace)
+
+	def z2chi(z):
+		return np.interp(z, zspace, chis)
+
+	def chi2z(chi):
+		return np.interp(chi, chis, zspace)
+
+	zmin, zmax = np.min(speccat['Z']), np.max(speccat['Z'])
+	zspecbins = np.linspace(zmin, zmax, nspecbins+1)
+	dzspec = zspecbins[1] - zspecbins[0]
+
+	# optionally throw out photo objects which are very unlikely pairs, N sigma away from spec z range of interest
+	zphot_uplims = photcat['Zphot'] + sigthresh * photcat['Zphot_err']
+	zphot_lolims = photcat['Zphot'] - sigthresh * photcat['Zphot_err']
+	zphot_lolims[np.where(zphot_lolims < 0)] = 0.
+	photcat = photcat[np.where((zphot_lolims < zmax) & (zphot_uplims > zmin))]
+
+	zphotbins = np.linspace(np.min(photcat['Zphot']), np.max(photcat['Zphot']), nphotbins+1)
+
+	fij = []
+	nij = []
+	for j in range(nspecbins):
+		specslice = speccat[np.where((speccat['Z'] >= zspecbins[j]) & (speccat['Z'] <= zspecbins[j+1]))]
+
+		chi_eff = z2chi(zspecbins[j] + dzspec / 2.)
+		theta_scales = np.degrees(rpscales / chi_eff)
+		chirange = (np.min(specslice['CHI']) - pimax, np.max(specslice['CHI']) + pimax)
+		zrange = (chi2z(chirange[0]), chi2z(chirange[1]))
+
+		for i in range(nphotbins):
+			photslice = photcat[np.where((photcat['Zphot'] >= zphotbins[i]) & (photcat['Zphot'] <= zphotbins[i+1]))]
+			weights = norm.cdf(zrange[1], loc=photslice['Zphot'], scale=photslice['Zphot_err']) - \
+					  norm.cdf(zrange[0], loc=photslice['Zphot'], scale=photslice['Zphot_err'])
+			fij.append(np.average(weights))
+			nij.append(len(photslice) * len(specslice))
+			speccoords = (specslice['RA'], specslice['DEC'], None)
+			photcoords = (photslice['RA'], photslice['DEC'], None)
+			#data_counts = cross_counts(theta_scales, speccoords, photcoords, None, None, nthreads=nthreads, fulldict=False)
+	nij, fij = np.array(nij), np.array(fij)
+	cij = nij * fij / np.sum(nij * fij ** 2)
+	return cij
