@@ -100,6 +100,64 @@ def plot_2d_corr_func(cf, setnegszero=True, inputrange=(None, None), smooth=8, c
 
 	return fig
 
+def plot_s2_xi(cf, inputrange=(None, None), smooth=8, cmap='jet',
+					  ncontour=10, rps=None, pis=None):
+	#implement calculating s^2 *xi(rp, pi), s = sqrt(rp^2+pi^2), so no need for log
+	rpgrid, pigrid = np.meshgrid(rps, pis)
+	sgrid = np.sqrt(rpgrid ** 2 + pigrid ** 2)
+
+	nbins = int(np.sqrt(len(cf)))
+	cf2d = np.reshape(np.array(cf), (-1, nbins))
+
+	qTR =  cf2d.copy() * sgrid ** 2
+	qTR = qTR.T  # top right quadrant
+	qTL = np.fliplr(qTR)  # top left quadrant
+	qBL = np.flipud(qTL)  # bottom left quadrant
+	qBR = np.fliplr(qBL)  # bottom right quadrant
+	qT = np.hstack((qTL, qTR))  # top half
+	qB = np.hstack((qBL, qBR))  # bottom half
+	qq = np.vstack((qB, qT))  # full array
+	if (smooth > 0):
+		qqs = gausssmooth(qq, n=smooth)  # smoothed full array
+	else:
+		qqs = qq
+
+	fig, ax = plt.subplots(figsize=(8, 8))
+	outputrange = (np.amin(qqs), np.amax(qqs))
+	halfwidth = float(nbins)
+
+	# Get bin coordinates
+	x,y = np.meshgrid(np.arange(-nbins, nbins+1), np.arange(-nbins, nbins+1))
+
+	# Plot array
+	pc = ax.pcolor(x,y,qqs,cmap=cmap, vmin=inputrange[0], vmax=inputrange[1])
+	# Plot contours
+	lev = np.linspace(np.amin(qqs),np.amax(qqs),ncontour)
+	ax.contour(np.linspace(-halfwidth, halfwidth, 2*nbins),
+			np.linspace(-halfwidth, halfwidth, 2*nbins),
+			qqs, levels=lev, colors='k',
+			linestyles='solid', linewidths=1)
+
+	"""nbins = int(np.sqrt(len(cf)))
+	ara = np.arange(nbins)
+	xx, yy = np.meshgrid(ara, ara, sparse=True)
+	rs = np.sqrt(xx**2 + yy**2)
+	cf2d = np.reshape(np.array(cf), (-1, nbins))
+	bottomrightquad = np.flip(cf2d, axis=0)
+	righthalf = np.vstack((bottomrightquad, cf2d))
+	lefthalf = np.flip(righthalf, axis=1)
+	full = np.hstack((lefthalf, righthalf))
+
+	flipped = np.swapaxes(full, 0, 1)"""
+	divider = make_axes_locatable(ax)
+	cax = divider.append_axes('right', size='5%', pad=0.05)
+	fig.colorbar(pc, cax=cax, orientation='vertical', label=r'$s^2  \xi(r_{p}, \pi)$')
+
+	ax.set_xlabel('$r_{p}$', fontsize=30)
+	ax.set_ylabel('$\pi$', fontsize=30)
+	plt.close()
+
+	return fig
 
 def plotmultiple_2d_corr_func(cfs, setnegszero=True, inputrange=(None, None), smooth=8, cmap='jet', ncontour=10):
 	if len(cfs) > 5:

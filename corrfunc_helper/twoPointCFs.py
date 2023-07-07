@@ -214,6 +214,7 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 						coords2=None, randcoords2=None, weights2=None, randweights2=None,
 						oversample=1, pimax=40., dpi=1., mubins=None, npatches=30, estimator='LS', wedges=None):
 
+	
 	# split footprint into N patches
 	patchmap = jackknife.bin_on_sky(randcoords1, npatches=npatches)
 	# get IDs for each patch
@@ -405,6 +406,10 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 
 	coords1, coords2 = utils.parse_coords(coords1), utils.parse_coords(coords2)
 	randcoords1, randcoords2 = utils.parse_coords(randcoords1), utils.parse_coords(randcoords2)
+	if randcoords2 is None:
+		print('Reference random catalog not given, but requesting Landy-Szalay estimator. '
+			  'Defaulting to Peebles estimator')
+		estimator = 'Peebles'
 
 	n_data1, weights1  = utils.parse_weights(len(coords1[0]), weights1)
 	n_rands1, randweights1 = utils.parse_weights(len(randcoords1[0]), randweights1)
