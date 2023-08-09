@@ -410,6 +410,7 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 		print('Reference random catalog not given, but requesting Landy-Szalay estimator. '
 			  'Defaulting to Peebles estimator')
 		estimator = 'Peebles'
+	coords1, coords2, randcoords1, randcoords2 = utils.check_crosscorr(coords1, coords2, randcoords1, randcoords2)
 
 	n_data1, weights1  = utils.parse_weights(len(coords1[0]), weights1)
 	n_rands1, randweights1 = utils.parse_weights(len(randcoords1[0]), randweights1)

@@ -20,6 +20,22 @@ def parse_coords(coords):
 			coords = lons, lats, cfutils.convert_to_native_endian(coords[2])
 	return coords
 
+def check_crosscorr(coords1, coords2, randcoords1, randcoords2):
+	"""
+	Ensures that a cross correlation won't crash if one sample has distances (redshifts/chis) and other does not
+	(want an angular cross correlation between a spectroscopic and photometric sample)
+	"""
+	if coords1[2] is None:
+		print("One sample has distance, but other doesn't, falling back to angular")
+		coords2 = coords2[0], coords2[1], None
+		if randcoords2 is not None:
+			randcoords2 = randcoords2[0], randcoords2[1], None
+	if coords2[2] is None:
+		print("One sample has distance, but other doesn't, falling back to angular")
+		coords1 = coords1[0], coords1[1], None
+		if randcoords1 is not None:
+			randcoords1 = randcoords1[0], randcoords1[1], None
+	return coords1, coords2, randcoords1, randcoords2
 
 def parse_weights(numcoords, weights):
 	"""
