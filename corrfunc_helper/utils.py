@@ -52,6 +52,12 @@ def parse_weights(numcoords, weights):
 
 
 def index_tuple(mytuple, idxs):
+	"""
+	indexing not supported for tuples of numpy arrays. Convert and then convert back to indexed tuple
+	:param mytuple: tuple of (ras, decs, chis)
+	:param idxs: np array of indices to keep
+	:return:
+	"""
 	mylist = list(mytuple)
 	for j in range(len(mylist)):
 		if mylist[j] is not None:
@@ -68,8 +74,12 @@ def get_nthreads():
 	return os.cpu_count()
 
 
-# calculate either logarithmic or linear centers of scale bins
 def bin_centers(binedges):
+	"""
+	calculate either logarithmic or linear centers of scale bins
+	:param binedges:
+	:return:
+	"""
 	# check if linear
 	if (binedges[2] - binedges[1]) == (binedges[1] - binedges[0]):
 		return (binedges[1:] + binedges[:-1]) / 2
@@ -79,6 +89,14 @@ def bin_centers(binedges):
 
 
 def match_random_zdist(samplecat, randomcat, zbins, n_rand2n_dat=10):
+	"""
+	Subsample the random catalog to match the dn/dz of the data sample
+	:param samplecat: astropy data table
+	:param randomcat: astropy random table
+	:param zbins: int, number of z bins
+	:param n_rand2n_dat: int, multiple more randoms than data
+	:return:
+	"""
 	minz, maxz = np.min(samplecat['Z']) - 0.01, np.max(samplecat['Z']) + 0.01
 	zhist, edges = np.histogram(samplecat['Z'], bins=zbins, range=(minz, maxz), density=True)
 	randhist, edges = np.histogram(randomcat['Z'], bins=zbins, range=(minz, maxz), density=True)
@@ -92,6 +110,11 @@ def match_random_zdist(samplecat, randomcat, zbins, n_rand2n_dat=10):
 
 
 def process_catalog(cat):
+	"""
+	Parse input astropy table and return tuples of coordinates and weights
+	:param cat: astropy table
+	:return:
+	"""
 	ra, dec = cat['RA'], cat['DEC']
 	try:
 		chi = cat['CHI']
