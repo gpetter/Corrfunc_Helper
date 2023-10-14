@@ -18,6 +18,7 @@ coord_dict = {'RA': 0, 'DEC': 1, 'CHI': 2}
 # count autocorrelation pairs
 def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., dpi=1., mubins=None):
 	"""
+	internal function
 	Measure autocorrelation counts of a sample
 
 	:param scales: array, bin edges in degrees for angular, or Mpc/h for spatial
@@ -67,6 +68,7 @@ def auto_counts(scales, coords, weights, nthreads=1, fulldict=True, pimax=40., d
 # count cross-pairs between samples
 def cross_counts(scales, coords1, coords2, weights1, weights2, nthreads=1, fulldict=True, pimax=40., dpi=1., mubins=None):
 	"""
+	internal function
 	Measure cross-correlation counts of a two samples
 
 	:param scales: array, bin edges in degrees for angular, or Mpc/h for spatial
@@ -126,6 +128,11 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 					coords1, randcoords1, weights1, randweights1,
 					coords2, randcoords2, weights2, randweights2,
 					mubins, estimator, pimax, dpi):
+	"""
+	internal function
+	count pairs inside a jackknife region
+
+	"""
 	nside = hp.npix2nside(len(patchmap))
 	# unpack coordinates
 	ras1, decs1, chis1 = coords1
@@ -209,10 +216,13 @@ def counts_in_patch(patchval, patchmap, scales, nthreads,
 	return [d1d2counts, d1r2counts, d2r1counts, r1r2counts, n_data1, n_rands1, n_data2, n_rands2]
 
 
-#
 def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, weights1, randweights1,
 						coords2=None, randcoords2=None, weights2=None, randweights2=None,
 						oversample=1, pimax=40., dpi=1., mubins=None, npatches=30, estimator='LS', wedges=None):
+	"""
+	internal function
+	bin galaxies into patches on the sky, bootstrap resample the counts in each patch for error estimation
+	"""
 
 	
 	# split footprint into N patches
@@ -277,11 +287,15 @@ def bootstrap_realizations(scales, nbootstrap, nthreads, coords1, randcoords1, w
 	return w_realizations, xi_realizations
 
 
-# Measure an autocorrelation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
-# the former measures an angular CF, latter a spatial CF
 def autocorr_from_coords(scales, coords, randcoords, weights=None, randweights=None,
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
 						nbootstrap=0, oversample=1, wedges=None, retplots=True):
+	"""
+	Measure an autocorrelation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
+	the former measures an angular CF, latter a spatial CF
+
+	:return: dictionary with correlation function results
+	"""
 	if nthreads is None:
 		nthreads = utils.get_nthreads()
 	coords, randcoords = utils.parse_coords(coords), utils.parse_coords(randcoords)
@@ -401,6 +415,13 @@ def crosscorr_from_coords(scales, coords1, coords2, randcoords1, randcoords2=Non
 						weights2=None, randweights1=None, randweights2=None,
 						nthreads=None, estimator='LS', pimax=40., dpi=1., mubins=None,
 						nbootstrap=0, oversample=1, wedges=None, retplots=True):
+	"""
+	Measure a cross-correlation function. Coords should be either tuple of (ra, dec) or (ra, dec, chi)
+	the former measures an angular CF, latter a spatial CF
+
+	:return: dictionary with correlation function results
+	"""
+
 	if nthreads is None:
 		nthreads = utils.get_nthreads()
 
@@ -531,7 +552,7 @@ def autocorr_cat(scales, datcat, randcat, nthreads=None, estimator='LS', pimax=4
 				  dpi=1., mubins=None, nbootstrap=0, oversample=1,
 				  wedges=None, retplots=True):
 	"""
-	Utility to save a couple lines by automatically extracting necessary info from input catalogs for clustering
+	Measure autocorrelation function of a catalog, passed in as astropy table
 
 	:param scales: array, same as above
 	:param datcat: astropy table, data catalog with RA, DEC, optional CHI, weight columns
@@ -551,6 +572,15 @@ def autocorr_cat(scales, datcat, randcat, nthreads=None, estimator='LS', pimax=4
 
 def crosscorr_cats(scales, datcat1, datcat2, randcat1, randcat2=None, nthreads=None, estimator='LS', pimax=40.,
 				  dpi=1., mubins=None, nbootstrap=0, oversample=1, wedges=None, retplots=True):
+	"""
+	Measure cross-correlation function of two catalogs, passed in as astropy table
+
+	:param scales: array, same as above
+	:param datcat: astropy table, data catalog with RA, DEC, optional CHI, weight columns
+	:param randcat: astropy table, data catalog with RA, DEC, optional CHI, weight columns
+	:return:
+	cross-correlation function statistics for the given catalog
+	"""
 	coord1, weight1 = utils.process_catalog(datcat1)
 	coord2, weight2 = utils.process_catalog(datcat2)
 	randcoord1, randweight1 = utils.process_catalog(randcat1)
@@ -595,17 +625,7 @@ def cross_spec_phot(rpscales, speccat, photcat, nphotbins, nspecbins,
 	Cross correlate a spectroscopic catalog with a photometric catalog containing photometric redshift estimates
 	Implements method proposed in Myers et al. 2009
 	Currently limited to normally distributed Zphot posteriors, but could alter to incorporate complex PDFs
-	:param rpscales:
-	:param speccat:
-	:param photcat:
-	:param nphotbins:
-	:param nspecbins:
-	:param specrand:
-	:param photrand:
-	:param pimax:
-	:param sigthresh:
-	:param nthreads:
-	:return:
+	Not yet functional
 	"""
 	from scipy.stats import norm
 	from colossus.cosmology import cosmology
